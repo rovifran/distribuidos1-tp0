@@ -12,6 +12,10 @@ services:
       - LOGGING_LEVEL=DEBUG
     networks:
       - testing_net
+    volumes:
+      - type: bind
+        source: ./server/config.ini
+        target: /config.ini
 
 """
 
@@ -26,6 +30,10 @@ CLIENT_STR = """  client%AMOUNT%:
       - testing_net
     depends_on:
       - server
+    volumes:
+      - type: bind
+        source: ./client/config.yaml
+        target: /config.yaml
 
 """
 
@@ -64,6 +72,9 @@ def writeDockerComposeFile(clients_amount, dest_file):
         raise FileNotFoundError(f"File {dest_file} not found, program closing.") from e 
 
 def main():
+    if len(sys.argv) != 3:
+        print("Usage: python generar-compose.py <file_name> <clients_amount>")
+        sys.exit(1)
     clients_amount = parseClientAmountInput(sys.argv[2])
     writeDockerComposeFile(clients_amount, sys.argv[1])
 
