@@ -1,8 +1,7 @@
 import sys
 
 DEST_FILE = "docker-compose-dev.yaml"
-BEGINNING_STR = """version: '3.9'
-name: tp0
+BEGINNING_STR = """name: tp0
 services:
   server:
     container_name: server
@@ -54,7 +53,7 @@ def writeDockerComposeFile(clients_amount, dest_file):
     Writes the docker-compose file with the given amount of clients.
     If the file is not found, raises a FileNotFoundError.
     """
-    
+
     try:
       with open(dest_file, 'w') as f:
           f.write(BEGINNING_STR)
