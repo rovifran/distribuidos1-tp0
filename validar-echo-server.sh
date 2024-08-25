@@ -1,4 +1,12 @@
 #!/bin/bash
-docker run --detach --name=echo-server-test --network=tp0_testing_net subfuzion/netcat -l -p 12345
-sleep 2
-echo -n "Test message" | docker exec -i echo-server-test nc -N server 12345
+expected_response="Test message"
+response=$(docker run -i --name=echo_server_test --network=tp0_testing_net subfuzion/netcat server 12345 <<< $expected_response)
+
+if [ "$expected_response" = "$response" ]; then
+    echo "action: test_echo_server | result: success"
+else
+    echo "action: test_echo_server | result: fail"
+fi
+
+docker stop echo_server_test
+docker rm echo_server_test
