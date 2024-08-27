@@ -1,5 +1,6 @@
 import socket
 import logging
+from common.error_handling import GracefulFinisher, SigTermError
 
 
 class Server:
@@ -18,11 +19,19 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        # TODO: Modify this program to handle signal to graceful shutdown
-        # the server
+        graceful_finisher = GracefulFinisher()
+
         while True:
-            client_sock = self.__accept_new_connection()
-            self.__handle_client_connection(client_sock)
+            try:
+                client_sock = self.__accept_new_connection()
+                self.__handle_client_connection(client_sock)
+            except SigTermError:
+                logging.info(f'action: signal of type: SIGTERM | result: program terminating...')
+                break
+            finally:
+                if client_sock != None:
+                    client_sock.close()
+
 
     def __handle_client_connection(self, client_sock):
         """
