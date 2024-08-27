@@ -3,3 +3,7 @@
 
 # Executables
 bin/
+
+# Cache
+**/__pycache__/
+**/*.pyc
