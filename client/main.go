@@ -117,5 +117,8 @@ func main() {
 
 	go gracefulFinisher.StartGracefulFinisher()
 	client.StartClientLoop()
-	mainChannel <- true
+	if !gracefulFinisher.Finished {
+		mainChannel <- true
+		log.Infof("action: program terminated | result: success")
+	}
 }

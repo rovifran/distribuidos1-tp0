@@ -21,13 +21,13 @@ class Server:
 
         graceful_finisher = GracefulFinisher()
 
-        while True:
+        while not graceful_finisher.finished:
             try:
                 client_sock = self.__accept_new_connection()
                 self.__handle_client_connection(client_sock)
             except SigTermError:
-                logging.info(f'action: signal of type: SIGTERM | result: program terminating...')
-                break
+                logging.info(f'action: SIGTERM received | result: finishing early')
+                
             finally:
                 if client_sock != None:
                     client_sock.close()

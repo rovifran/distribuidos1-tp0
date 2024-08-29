@@ -11,7 +11,7 @@ type GracefulFinisher struct {
 	signalChannel chan os.Signal
 	clientChannel chan bool
 	client        *Client
-	finished      bool
+	Finished      bool
 }
 
 func NewGracefulFinisher(mainChannel chan bool, client *Client, clientChannel chan bool) *GracefulFinisher {
@@ -23,12 +23,12 @@ func NewGracefulFinisher(mainChannel chan bool, client *Client, clientChannel ch
 		mainChannel:   mainChannel,
 		client:        client,
 		clientChannel: clientChannel,
-		finished:      false,
+		Finished:      false,
 	}
 }
 
 func (g *GracefulFinisher) finishGracefully() {
-	g.finished = true
+	g.Finished = true
 	g.clientChannel <- true
 }
 
