@@ -110,6 +110,12 @@ func main() {
 		LoopPeriod:    v.GetDuration("loop.period"),
 	}
 
-	client := common.NewClient(clientConfig)
+	mainChannel := make(chan bool, 1)
+	clientChannel := make(chan bool, 1)
+	client := common.NewClient(clientConfig, clientChannel)
+	gracefulFinisher := common.NewGracefulFinisher(mainChannel, client, clientChannel)
+
+	go gracefulFinisher.StartGracefulFinisher()
 	client.StartClientLoop()
+	mainChannel <- true
 }

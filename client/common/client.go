@@ -23,13 +23,15 @@ type ClientConfig struct {
 type Client struct {
 	config ClientConfig
 	conn   net.Conn
+	chnl   chan bool
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(config ClientConfig) *Client {
+func NewClient(config ClientConfig, chnl chan bool) *Client {
 	client := &Client{
 		config: config,
+		chnl:   chnl,
 	}
 	return client
 }
@@ -54,6 +56,7 @@ func (c *Client) createClientSocket() error {
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
+clientLoop:
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
@@ -82,7 +85,14 @@ func (c *Client) StartClientLoop() {
 		)
 
 		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
+		// time.Sleep(c.config.LoopPeriod)
+		select {
+		case <-c.chnl:
+			break clientLoop
+
+		case <-time.After(c.config.LoopPeriod):
+			continue
+		}
 
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)

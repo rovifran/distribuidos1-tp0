@@ -4,7 +4,6 @@ from configparser import ConfigParser
 from common.server import Server
 import logging
 import os
-import common.error_handling
 
 
 def initialize_config():
