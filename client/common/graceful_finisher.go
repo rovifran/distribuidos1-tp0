@@ -16,7 +16,7 @@ type GracefulFinisher struct {
 
 func NewGracefulFinisher(mainChannel chan bool, client *Client, clientChannel chan bool) *GracefulFinisher {
 	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, syscall.SIGTERM)
+	signal.Notify(signalChannel, syscall.SIGTERM, syscall.SIGINT)
 
 	return &GracefulFinisher{
 		signalChannel: signalChannel,

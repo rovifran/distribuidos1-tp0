@@ -8,6 +8,7 @@ class GracefulFinisher:
     finished = False
     def __init__(self):
         signal.signal(signal.SIGTERM, self.toggle_finished_state)
+        signal.signal(signal.SIGINT, self.toggle_finished_state)
 
     def toggle_finished_state(self, signum, frame):
         self.finished = True
