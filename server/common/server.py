@@ -2,7 +2,7 @@ import socket
 import logging
 from common.utils import Bet, store_bets
 from common.graceful_finisher import SigTermSignalBinder, SigTermError
-
+from common.utils import Bet, store_bets
 MSG_LEN_SIZE = 2
 
 class Server:
