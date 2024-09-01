@@ -24,15 +24,15 @@ func NewBetReader() *BetReader {
 }
 
 func (br *BetReader) ReadBets() *Bet {
-	agency, _ := strconv.ParseUint(os.Getenv("agencia"), 10, 8)
-	dni, _ := strconv.ParseUint(os.Getenv("dni"), 10, 32)
-	number, _ := strconv.ParseUint(os.Getenv("numero"), 10, 16)
+	agency, _ := strconv.ParseUint(os.Getenv("AGENCIA"), 10, 8)
+	dni, _ := strconv.ParseUint(os.Getenv("DNI"), 10, 32)
+	number, _ := strconv.ParseUint(os.Getenv("NUMERO"), 10, 16)
 	bet := NewBet(
 		uint8(agency),
-		os.Getenv("nombre"),
-		os.Getenv("apellido"),
+		os.Getenv("NOMBRE"),
+		os.Getenv("APELLIDO"),
 		uint32(dni),
-		os.Getenv("nacimiento"),
+		os.Getenv("NACIMIENTO"),
 		uint16(number),
 	)
 	return bet

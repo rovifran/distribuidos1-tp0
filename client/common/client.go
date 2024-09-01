@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"encoding/binary"
 	"net"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 )
 
 var log = logging.MustGetLogger("log")
+const SIZE_UINT16 = 2
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -63,6 +65,17 @@ func (c *Client) sendBets(bets *Bet) error {
 		return err
 	}
 
+	encodedBytesLen := make([]byte, SIZE_UINT16)
+	binary.LittleEndian.PutUint16(encodedBytesLen, uint16(len(encodedBet)))
+	_, err = bets.safeWriteBytes(c.conn, encodedBytesLen)
+	if err != nil {
+		log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return err
+	}
+
 	_, err = bets.safeWriteBytes(c.conn, encodedBet)
 	if err != nil {
 		log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
@@ -87,17 +100,22 @@ clientLoop:
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
 
-		// Send the bet to the server
-		c.sendBets(bets)
+		log.Infof("%+v", bets)
 
-		// // TODO: Modify the send to avoid short-write
-		// fmt.Fprintf(
-		// 	c.conn,
-		// 	"[CLIENT %v] Message N°%v\n",
-		// 	c.config.ID,
-		// 	msgID,
-		// )
+		// Send the bet to the server
+		err := c.sendBets(bets)
+		if err != nil {
+			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			return
+		}
+
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
+			bets.dni,
+			bets.number)
 		c.conn.Close()
 
 		if err != nil {
