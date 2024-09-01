@@ -1,13 +1,14 @@
 package common
 
 import (
+	"fmt"
 	"testing"
-
 )
 
 func TestEncodeDecode(t *testing.T) {
 	originalBet := NewBet(1, "John", "Pork", 123456789, "1980-01-01", 42)
 	encodedBet, err := originalBet.Encode()
+	fmt.Println(encodedBet)
 	if err != nil {
 		t.Errorf("Error encoding bet: %s", err)
 	}

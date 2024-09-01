@@ -4,6 +4,16 @@ import unittest
 
 class TestUtils(unittest.TestCase):
 
+    def test_bet_decodeBytes_must_return_correct_bet_instance(self):
+        encodedBet = bytearray([1,4,74,111,104,110,4,80,111,114,107,21,205,91,7,10,49,57,56,48,45,48,49,45,48,49,42,0])
+        b = Bet.decodeBytes(encodedBet)
+        self.assertEqual(1, b.agency)
+        self.assertEqual('John', b.first_name)
+        self.assertEqual('Pork', b.last_name)
+        self.assertEqual(123456789, b.document)
+        self.assertEqual(datetime.date(1980, 1, 1), b.birthdate)
+        self.assertEqual(42, b.number)
+
     def tearDown(self):
         if os.path.exists(STORAGE_FILEPATH):
             os.remove(STORAGE_FILEPATH)

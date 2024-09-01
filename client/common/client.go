@@ -2,7 +2,6 @@ package common
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"time"
 
@@ -31,8 +30,8 @@ type Client struct {
 // as a parameter
 func NewClient(config ClientConfig, chnl chan bool) *Client {
 	client := &Client{
-		config: config,
-		chnl:   chnl,
+		config:    config,
+		chnl:      chnl,
 		betReader: NewBetReader(),
 	}
 	return client
@@ -54,6 +53,28 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
+func (c *Client) sendBets(bets *Bet) error {
+	encodedBet, err := bets.Encode()
+	if err != nil {
+		log.Errorf("action: encode_bet | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return err
+	}
+
+	_, err = bets.safeWriteBytes(c.conn, encodedBet)
+	if err != nil {
+		log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return err
+	}
+
+	return nil
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
@@ -63,13 +84,19 @@ clientLoop:
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
 
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
+		//Obtain the bet from the BetReader
+		bets := c.betReader.ReadBets()
+
+		// Send the bet to the server
+		c.sendBets(bets)
+
+		// // TODO: Modify the send to avoid short-write
+		// fmt.Fprintf(
+		// 	c.conn,
+		// 	"[CLIENT %v] Message N°%v\n",
+		// 	c.config.ID,
+		// 	msgID,
+		// )
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		c.conn.Close()
 
