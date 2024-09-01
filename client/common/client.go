@@ -21,9 +21,10 @@ type ClientConfig struct {
 
 // Client Entity that encapsulates how
 type Client struct {
-	config ClientConfig
-	conn   net.Conn
-	chnl   chan bool
+	config    ClientConfig
+	conn      net.Conn
+	chnl      chan bool
+	betReader *BetReader
 }
 
 // NewClient Initializes a new client receiving the configuration
@@ -32,6 +33,7 @@ func NewClient(config ClientConfig, chnl chan bool) *Client {
 	client := &Client{
 		config: config,
 		chnl:   chnl,
+		betReader: NewBetReader(),
 	}
 	return client
 }
