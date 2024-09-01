@@ -55,6 +55,9 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
+// SendBets Sends the bet to the server, ensuring all the bytes
+// are sent. if an error occurs, it is loggedand the function
+// returns an error
 func (c *Client) sendBets(bets *Bet) error {
 	encodedBet, err := bets.Encode()
 	if err != nil {

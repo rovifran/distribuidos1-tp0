@@ -8,6 +8,8 @@ import (
 	"strconv"
 )
 
+// Struct that encapsulates the bet information, and provides
+// methods to encode and decode it
 type Bet struct {
 	agency   uint8
 	name     string
@@ -17,12 +19,17 @@ type Bet struct {
 	number   uint16
 }
 
+// BetReader is a struct that reads the bet information from
+// the environment variables and returns a Bet struct
 type BetReader struct{}
 
+// NewBetReader Initializes a new BetReader
 func NewBetReader() *BetReader {
 	return &BetReader{}
 }
 
+// ReadBets Reads the bet information from the environment variables
+// and returns a Bet struct
 func (br *BetReader) ReadBets() *Bet {
 	agency, _ := strconv.ParseUint(os.Getenv("AGENCIA"), 10, 8)
 	dni, _ := strconv.ParseUint(os.Getenv("DNI"), 10, 32)
@@ -38,6 +45,7 @@ func (br *BetReader) ReadBets() *Bet {
 	return bet
 }
 
+// NewBet Initializes a new Bet struct given the corresponding parameters
 func NewBet(agency uint8, name string, surname string, dni uint32, birthday string, number uint16) *Bet {
 	return &Bet{
 		agency:   agency,
@@ -49,6 +57,9 @@ func NewBet(agency uint8, name string, surname string, dni uint32, birthday stri
 	}
 }
 
+// safeWriteBytes Writes bytes to a buffer, ensuring that all bytes are written
+// thus tolerating short writes: keep writing until all bytes are written
+// or, if an error occurs and it is not a short write, return the error
 func (b *Bet) safeWriteBytes(buf io.Writer, bytes []byte) (int, error) {
 	writtenBytes := 0
 	for writtenBytes < len(bytes) {
@@ -61,6 +72,8 @@ func (b *Bet) safeWriteBytes(buf io.Writer, bytes []byte) (int, error) {
 	return writtenBytes, nil
 }
 
+// safeWriteStringField Writes a string field to a buffer, as well as
+// its length
 func (b *Bet) safeWriteStringField(buf *bytes.Buffer, field string) (int, error) {
 	encodedFieldLen := byte(uint8(len(field)))
 	encodedField := []byte(field)
@@ -73,6 +86,9 @@ func (b *Bet) safeWriteStringField(buf *bytes.Buffer, field string) (int, error)
 	}
 	return len(encodedField) + 1, nil
 }
+
+// Encode Encodes the bet information into a byte array. If an error
+// occurs, it is returned
 func (b *Bet) Encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
@@ -115,6 +131,9 @@ func (b *Bet) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// createStrFieldFromBytes Creates a string field from a byte array
+// by reading the length of the field and then the field itself.
+// If an error occurs, it is returned
 func createStrFieldFromBytes(buf *bytes.Buffer) (string, error) {
 	fieldLen, err := buf.ReadByte()
 	if fieldLen == 0 || err != nil {
@@ -134,6 +153,8 @@ func createStrFieldFromBytes(buf *bytes.Buffer) (string, error) {
 	return string(field), nil
 }
 
+// Decode Decodes a byte array into a Bet struct. If an error occurs,
+// it is returned
 func Decode(data []byte) (*Bet, error) {
 	buf := bytes.NewBuffer(data)
 	agency := buf.Next(1)[0]
@@ -154,4 +175,29 @@ func Decode(data []byte) (*Bet, error) {
 
 	return NewBet(agency, name, surname, dni, birthday, number), nil
 
+}
+
+// EncodeBets Encodes a slice of bets into a byte array. If an error
+// occurs, it is returned
+func EncodeBets(bets []*Bet) ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	for _, bet := range bets {
+		encodedBet, err := bet.Encode()
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = bet.safeWriteBytes(buf, []byte{uint8(len(encodedBet))})
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = bet.safeWriteBytes(buf, encodedBet)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
