@@ -9,6 +9,7 @@ import (
 )
 
 type Bet struct {
+	agency   uint8
 	name     string
 	surname  string
 	dni      uint32
@@ -23,9 +24,11 @@ func NewBetReader() *BetReader {
 }
 
 func (br *BetReader) ReadBets() *Bet {
+	agency, _ := strconv.ParseUint(os.Getenv("agencia"), 10, 8)
 	dni, _ := strconv.ParseUint(os.Getenv("dni"), 10, 32)
 	number, _ := strconv.ParseUint(os.Getenv("numero"), 10, 16)
 	bet := NewBet(
+		uint8(agency),
 		os.Getenv("nombre"),
 		os.Getenv("apellido"),
 		uint32(dni),
@@ -35,8 +38,9 @@ func (br *BetReader) ReadBets() *Bet {
 	return bet
 }
 
-func NewBet(name string, surname string, dni uint32, birthday string, number uint16) *Bet {
+func NewBet(agency uint8, name string, surname string, dni uint32, birthday string, number uint16) *Bet {
 	return &Bet{
+		agency:   agency,
 		name:     name,
 		surname:  surname,
 		dni:      dni,
@@ -45,7 +49,7 @@ func NewBet(name string, surname string, dni uint32, birthday string, number uin
 	}
 }
 
-func (b *Bet) safeWriteBytes(buf *bytes.Buffer, bytes []byte) (int, error) {
+func (b *Bet) safeWriteBytes(buf io.Writer, bytes []byte) (int, error) {
 	writtenBytes := 0
 	for writtenBytes < len(bytes) {
 		n, err := buf.Write(bytes[writtenBytes:])
@@ -61,7 +65,7 @@ func (b *Bet) safeWriteStringField(buf *bytes.Buffer, field string) (int, error)
 	encodedFieldLen := byte(uint8(len(field)))
 	encodedField := []byte(field)
 
-	for _, field := range [][]byte{[]byte{encodedFieldLen}, encodedField} {
+	for _, field := range [][]byte{{encodedFieldLen}, encodedField} {
 		_, err := b.safeWriteBytes(buf, field)
 		if err != nil {
 			return 0, err
@@ -71,7 +75,15 @@ func (b *Bet) safeWriteStringField(buf *bytes.Buffer, field string) (int, error)
 }
 func (b *Bet) Encode() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	_, err := b.safeWriteStringField(buf, b.name)
+
+	agencyBytes := make([]byte, 1)
+	agencyBytes[0] = b.agency
+	_, err := b.safeWriteBytes(buf, agencyBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = b.safeWriteStringField(buf, b.name)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +136,7 @@ func createStrFieldFromBytes(buf *bytes.Buffer) (string, error) {
 
 func Decode(data []byte) (*Bet, error) {
 	buf := bytes.NewBuffer(data)
+	agency := buf.Next(1)[0]
 	name, err := createStrFieldFromBytes(buf)
 	if err != nil {
 		return nil, err
@@ -139,6 +152,6 @@ func Decode(data []byte) (*Bet, error) {
 	}
 	number := binary.LittleEndian.Uint16(buf.Next(2))
 
-	return NewBet(name, surname, dni, birthday, number), nil
+	return NewBet(agency, name, surname, dni, birthday, number), nil
 
 }

@@ -6,7 +6,7 @@ import (
 )
 
 func TestEncodeDecode(t *testing.T) {
-	originalBet := NewBet("John", "Pork", 123456789, "1980-01-01", 42)
+	originalBet := NewBet(1, "John", "Pork", 123456789, "1980-01-01", 42)
 	encodedBet, err := originalBet.Encode()
 	if err != nil {
 		t.Errorf("Error encoding bet: %s", err)
