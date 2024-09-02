@@ -1,6 +1,6 @@
 #!/bin/bash
 expected_response="Test message"
-response=$(docker run -i --name=echo_server_test --network=tp0_testing_net subfuzion/netcat server 12345 <<< $expected_response)
+response=$(docker run -i --name=echo_server_test --network=tp0_testing_net subfuzion/netcat -w 10 server 12345 <<< $expected_response)
 
 if [ "$expected_response" = "$response" ]; then
     echo "action: test_echo_server | result: success"
