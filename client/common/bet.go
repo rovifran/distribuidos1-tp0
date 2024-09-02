@@ -71,21 +71,21 @@ func (br *BetReader) CloseFile() error {
 // ivalid values for numeric fields, it returns an error
 func (br *BetReader) checkFields(line []string) error {
 	if len(line) != AMOUNT_OF_FIELDS {
-		return errors.New("Invalid amount of fields")
+		return errors.New("invalid amount of fields")
 	}
 
 	for _, field := range line {
 		if len(field) == 0 {
-			return errors.New("Empty field")
+			return errors.New("empty field")
 		}
 	}
 
 	if _, err := strconv.Atoi(line[DNI_POS]); err != nil {
-		return errors.New("Invalid DNI")
+		return errors.New("invalid DNI")
 	}
 
 	if _, err := strconv.Atoi(line[NUMBER_POS]); err != nil {
-		return errors.New("Invalid number")
+		return errors.New("invalid number")
 	}
 
 	return nil
