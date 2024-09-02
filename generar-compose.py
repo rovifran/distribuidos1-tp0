@@ -34,6 +34,7 @@ CLIENT_STR = """  client%AMOUNT%:
       - type: bind
         source: ./client/config.yaml
         target: /config.yaml
+      - client_data:/data
 
 """
 
@@ -43,6 +44,15 @@ NET_STR = """networks:
       driver: default
       config:
         - subnet: 172.25.125.0/24
+"""
+
+VOLUMES_STR = """volumes:
+  client_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: .data/
+      o: bind
 """
 
 def parseClientAmountInput(amount: str) -> int:
@@ -68,6 +78,7 @@ def writeDockerComposeFile(clients_amount, dest_file):
           for i in range(0, clients_amount):
               f.write(CLIENT_STR.replace('%AMOUNT%', str(i + 1)))
           f.write(NET_STR)
+          f.write(VOLUMES_STR)
     except FileNotFoundError as e:
         raise FileNotFoundError(f"File {dest_file} not found, program closing.") from e 
 

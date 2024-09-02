@@ -96,19 +96,21 @@ func (c *Client) sendBets(bets []*Bet) error {
 	return nil
 }
 
+func (c *Client) obtainBetsFilePath() string {
+	return "/data/agency-" + c.config.ID + ".csv"
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	if err := c.betReader.OpenFile("data/agency-1.csv"); err != nil {
+	if err := c.betReader.OpenFile(c.obtainBetsFilePath()); err != nil {
 		log.Infof("action: open_file | result: fail | client_id: %v | error: %v",
 			c.config.ID,
 			err,
 		)
 		return
 	}
-
-	log.Infof("%+v", c.betReader.file)
 
 	defer c.betReader.CloseFile()
 
