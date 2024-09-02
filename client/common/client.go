@@ -140,7 +140,17 @@ clientLoop:
 			len(bets))
 
 		responseBytes := make([]byte, SERVER_MSG_SIZE)
-		if _, err := SafeReadBytes(bufio.NewReader(c.conn), responseBytes); err != nil {
+
+		n, err := SafeReadBytes(bufio.NewReader(c.conn), responseBytes)
+
+		if n == 0 {
+			log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
+				c.config.ID,
+			)
+			return
+		}
+
+		if err != nil {
 			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 				c.config.ID,
 				err,
