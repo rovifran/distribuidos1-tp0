@@ -7,9 +7,6 @@ services:
     container_name: server
     image: server:latest
     entrypoint: python3 /main.py
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOGGING_LEVEL=INFO
     networks:
       - testing_net
     volumes:
@@ -23,9 +20,6 @@ CLIENT_STR = """  client%AMOUNT%:
     container_name: client%AMOUNT%
     image: client:latest
     entrypoint: /client
-    environment:
-      - CLI_ID=%AMOUNT%
-      - CLI_LOG_LEVEL=INFO
     networks:
       - testing_net
     depends_on:
