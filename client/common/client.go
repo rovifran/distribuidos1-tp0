@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"encoding/binary"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/op/go-logging"
 )
 
 var log = logging.MustGetLogger("log")
+
 const SIZE_UINT16 = 2
 
 // ClientConfig Configuration used by the client
@@ -18,6 +20,7 @@ type ClientConfig struct {
 	ServerAddress string
 	LoopAmount    int
 	LoopPeriod    time.Duration
+	MaxBatchSize  int
 }
 
 // Client Entity that encapsulates how
@@ -31,10 +34,11 @@ type Client struct {
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
 func NewClient(config ClientConfig, chnl chan bool) *Client {
+	agency, _ := strconv.Atoi(config.ID)
 	client := &Client{
 		config:    config,
 		chnl:      chnl,
-		betReader: NewBetReader(),
+		betReader: NewBetReader(config.MaxBatchSize, uint8(agency)),
 	}
 	return client
 }
@@ -95,6 +99,9 @@ func (c *Client) sendBets(bets *Bet) error {
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
+	c.betReader.OpenFile("bets.csv")
+	defer c.betReader.CloseFile()
+
 clientLoop:
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
@@ -103,10 +110,8 @@ clientLoop:
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
 
-		log.Infof("%+v", bets)
-
 		// Send the bet to the server
-		err := c.sendBets(bets)
+		err := c.sendBets(bets[0])
 		if err != nil {
 			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
 				c.config.ID,
@@ -117,8 +122,8 @@ clientLoop:
 
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-			bets.dni,
-			bets.number)
+			bets[0].dni,
+			bets[0].number)
 		c.conn.Close()
 
 		if err != nil {

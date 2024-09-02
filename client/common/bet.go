@@ -3,10 +3,20 @@ package common
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/csv"
+	"errors"
 	"io"
 	"os"
 	"strconv"
 )
+
+const NAME_POS = 0
+const SURNAME_POS = 1
+const DNI_POS = 2
+const BIRTHDAY_POS = 3
+const NUMBER_POS = 4
+
+const AMOUNT_OF_FIELDS = 5
 
 // Struct that encapsulates the bet information, and provides
 // methods to encode and decode it
@@ -21,28 +31,96 @@ type Bet struct {
 
 // BetReader is a struct that reads the bet information from
 // the environment variables and returns a Bet struct
-type BetReader struct{}
+type BetReader struct {
+	file      io.Reader
+	bufreader *csv.Reader
+	maxBets   int
+	agency    uint8
+	Finished  bool
+}
 
 // NewBetReader Initializes a new BetReader
-func NewBetReader() *BetReader {
-	return &BetReader{}
+func NewBetReader(maxBets int, agency uint8) *BetReader {
+	return &BetReader{
+		maxBets: maxBets,
+		agency:  agency,
+	}
+}
+
+// OpenFile Opens the file in the path passed by parameter
+func (br *BetReader) OpenFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	br.file = file
+	br.bufreader = csv.NewReader(file)
+	return nil
+}
+
+// CloseFile Closes the file
+func (br *BetReader) CloseFile() error {
+	if closer, ok := br.file.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// checkFields Checks if the fields of the bet are valid.
+// If there are less fields than expected, empty fields, or
+// ivalid values for numeric fields, it returns an error
+func (br *BetReader) checkFields(line []string) error {
+	if len(line) != AMOUNT_OF_FIELDS {
+		return errors.New("Invalid amount of fields")
+	}
+
+	for _, field := range line {
+		if len(field) == 0 {
+			return errors.New("Empty field")
+		}
+	}
+
+	if _, err := strconv.Atoi(line[DNI_POS]); err != nil {
+		return errors.New("Invalid DNI")
+	}
+
+	if _, err := strconv.Atoi(line[NUMBER_POS]); err != nil {
+		return errors.New("Invalid number")
+	}
+
+	return nil
 }
 
 // ReadBets Reads the bet information from the environment variables
 // and returns a Bet struct
-func (br *BetReader) ReadBets() *Bet {
-	agency, _ := strconv.ParseUint(os.Getenv("AGENCIA"), 10, 8)
-	dni, _ := strconv.ParseUint(os.Getenv("DNI"), 10, 32)
-	number, _ := strconv.ParseUint(os.Getenv("NUMERO"), 10, 16)
-	bet := NewBet(
-		uint8(agency),
-		os.Getenv("NOMBRE"),
-		os.Getenv("APELLIDO"),
-		uint32(dni),
-		os.Getenv("NACIMIENTO"),
-		uint16(number),
-	)
-	return bet
+func (br *BetReader) ReadBets() []*Bet {
+	bets := make([]*Bet, 0)
+
+	for acum := 0; acum < br.maxBets; acum++ {
+		line, err := br.bufreader.Read()
+		if err != nil {
+			if err == csv.ErrFieldCount {
+				continue // not enough fields, continue with the next line
+			}
+			br.Finished = true // if there are this kinds of error, don't read anymore
+			if err == io.EOF {
+				break
+			}
+			return nil
+		}
+
+		if err = br.checkFields(line); err != nil {
+			continue // same case as before
+		}
+
+		dni, _ := strconv.Atoi(line[DNI_POS])
+		number, _ := strconv.Atoi(line[NUMBER_POS])
+
+		bet := NewBet(br.agency, line[NAME_POS], line[SURNAME_POS], uint32(dni), line[BIRTHDAY_POS], uint16(number))
+		bets = append(bets, bet)
+	}
+
+	return bets
 }
 
 // NewBet Initializes a new Bet struct given the corresponding parameters
