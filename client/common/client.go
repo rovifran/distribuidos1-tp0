@@ -63,6 +63,7 @@ func (c *Client) createClientSocket() error {
 // are sent. if an error occurs, it is loggedand the function
 // returns an error
 func (c *Client) sendBets(bets []*Bet) error {
+	log.Infof("hola como andas %d", len(bets))
 	encodedBets, err := EncodeBets(bets)
 	if err != nil {
 		log.Errorf("action: encode_bet | result: fail | client_id: %v | error: %v",
@@ -99,13 +100,28 @@ func (c *Client) sendBets(bets []*Bet) error {
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	c.betReader.OpenFile("bets.csv")
+	if err := c.betReader.OpenFile("data/agency-1.csv"); err != nil {
+		log.Infof("action: open_file | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+
+	log.Infof("%+v", c.betReader.file)
+
 	defer c.betReader.CloseFile()
 
 clientLoop:
 	for !c.betReader.Finished {
 		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
+		if err := c.createClientSocket(); err != nil {
+			log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			return
+		}
 
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
@@ -121,9 +137,8 @@ clientLoop:
 		}
 
 		msg, err := bufio.NewReader(c.conn).ReadString('\n')
-		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-			bets[0].dni,
-			bets[0].number)
+		log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
+			len(bets))
 		c.conn.Close()
 
 		if err != nil {

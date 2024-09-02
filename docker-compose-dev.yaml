@@ -35,6 +35,7 @@ services:
       - type: bind
         source: ./client/config.yaml
         target: /config.yaml
+      - client_data:/data
 
 networks:
   testing_net:
@@ -42,3 +43,11 @@ networks:
       driver: default
       config:
         - subnet: 172.25.125.0/24
+
+volumes:
+  client_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: .data/
+      o: bind

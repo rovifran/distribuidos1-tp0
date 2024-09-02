@@ -95,8 +95,10 @@ func (br *BetReader) checkFields(line []string) error {
 // and returns a Bet struct
 func (br *BetReader) ReadBets() []*Bet {
 	bets := make([]*Bet, 0)
+	log.Infof(" maxbets %d", br.maxBets)
 
 	for acum := 0; acum < br.maxBets; acum++ {
+		log.Infof("acum: %d", acum)
 		line, err := br.bufreader.Read()
 		if err != nil {
 			if err == csv.ErrFieldCount {

@@ -3,7 +3,8 @@ import logging
 from common.graceful_finisher import GracefulFinisher, SigTermError
 from common.utils import Bet, store_bets
 
-MSG_LEN_SIZE = 2
+BET_LEN_SIZE = 1
+TOTAL_BETS_LEN_SIZE = 2
 
 class Server:
     def __init__(self, port, listen_backlog):
@@ -54,15 +55,21 @@ class Server:
                 msg += received
             return msg
         
-        msg = b''
+        bets = []
 
-        msg_len = _receive_all(MSG_LEN_SIZE)
-        msg_len = int.from_bytes(msg_len, 'little')
+        total_bets_len_bytes = _receive_all(TOTAL_BETS_LEN_SIZE)
+        total_bets_len = int.from_bytes(total_bets_len_bytes, 'little')
 
-        msg = _receive_all(msg_len)
-        bet = Bet.decodeBytes(msg)
+        total_read = 0
+        while total_read < total_bets_len:
+            bet_len_bytes = _receive_all(BET_LEN_SIZE)
+            bet_len = int.from_bytes(bet_len_bytes, 'little')
+            bet_bytes = _receive_all(bet_len)
+            bet = Bet.decodeBytes(bet_bytes)
+            bets.append(bet)
+            total_read += bet_len + BET_LEN_SIZE
 
-        return bet
+        return bets
 
     def safe_send(self, client_sock):
         """
@@ -89,11 +96,11 @@ class Server:
         client socket will also be closed
         """
         try:
-            bet = self.safe_receive(client_sock)
+            bets = self.safe_receive(client_sock)
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {bet}')
-            store_bets([bet])
-            logging.info(f'action: store_bets | result: success | amount of bets: 1')
+            logging.info(f'action: receive_message | result: success | ip: {addr[0]}') # | msg: {bet}')
+            store_bets(bets)
+            logging.info(f'action: store_bets | result: success | amount of bets: {len(bets)}')
             self.safe_send(client_sock)
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
