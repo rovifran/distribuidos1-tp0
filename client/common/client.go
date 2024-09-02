@@ -63,7 +63,6 @@ func (c *Client) createClientSocket() error {
 // are sent. if an error occurs, it is loggedand the function
 // returns an error
 func (c *Client) sendBets(bets []*Bet) error {
-	log.Infof("hola como andas %d", len(bets))
 	encodedBets, err := EncodeBets(bets)
 	if err != nil {
 		log.Errorf("action: encode_bet | result: fail | client_id: %v | error: %v",
