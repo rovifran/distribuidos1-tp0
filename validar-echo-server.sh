@@ -8,5 +8,5 @@ else
     echo "action: test_echo_server | result: fail"
 fi
 
-docker stop echo_server_test
-docker rm echo_server_test
+#docker stop echo_server_test
+#docker rm echo_server_test
