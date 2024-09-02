@@ -53,3 +53,25 @@ El protocolo de desserializacion es implementado de forma inversa en el servidor
 La escritura y lectura de datos a traves de los sockets es tolerante a fallas del tipo *short read* y *short write* basandose en la cantidad de bytes que se esperan leer o escribir. En caso de que se escriban menos bytes de lo esperado, se sigue intentando escribir los bytes restantes hasta que se haya escrito la cantidad de bytes esperada. Lo mismo sucede con la lectura de datos.  
   
 Se agrego funcionalidad a la clase `Bet` ya existente en el servidor, y se aprovecha esto para utilizar la funcion `store_bet`.
+
+# Ejercicio 6
+Para este ejercicio se pedia implementar la funcionalidad por el lado del cliente de mandar varias apuestas a la vez al servidor. Con el protocolo de comunicacion explicado anteriormente fue muy facil hacer las modificaciones requeridas para el cumplimiento del ejercicio.  
+  
+La cantidad maxima de apuestas que se pueden mandar esta determinado por el campo `batch.maxAmount` del archivo de configuracion del cliente. Este numero fue seteado en **134** con el siguiente criterio:  
+Escaneando las apuestas de los archivos de las agencias (con el script `max_chars.sh`), se obtuvo que la apuesta mas larga tiene 61 caracteres. Entonces en el peor de los casos, la longitud de la apuesta seria de 61 bytes considerando la longitud de los campos variables y la longitud de la apuesta en bytes. Como la consigna pedia no sobrepasar los 8kb de datos, se hizo el calculo de la cantidad maxima de apuestas que se pueden mandar con este formato, y resulto en el numero **134**.  
+Aunque la cantidad total de apuestas puede llegar a ser mas que ese maximo calculado (gracias a que la longitud de las apuestas no es fija), se decidio respetar el campo `batch.maxAmount`.  
+  
+La estructura de los mensajes que manda el cliente es la siguiente:
+```
+<tamaño en bytes de apuestas totales>
+<tamaño en bytes de apuesta 1>
+<apuesta1>
+<tamaño en bytes de apuesta 2>
+<apuesta2>
+...
+<tamaño en bytes de apuesta N>
+<apuestaN>
+```
+Mantuve la serializacion de la apuesta igual, lo unico que se modifico fue que el campo inicial ahora es la cantidad total de bytes a leer, y luego se sigue con la serializacion de las apuestas.  
+  
+Por el lado del servidor, tambien se hizo la modificacion correspondiente para que pueda leer la cantidad de bytes de apuestas totales, y luego leer las apuestas correspondientes. Luego se sigue con la serializacion de todas las apuestas (aca se asume que no hay errores gracias a la tolerancia a fallas implementada en el protocolo de comunicacion y tambien al mecanismo de integridad de los datos que ofrece TCP), su almacenamiento en el archivo de apuestas, y la respuesta al cliente con la cantidad de apuestas recibidas. Esta parte del protocolo fue la que sufrio cambios con respecto a la implementacion anterior: ahora se manda la cantidad de apuestas procesadas o un -1 indicando que hubo un error.  
