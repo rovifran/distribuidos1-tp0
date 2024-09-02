@@ -34,3 +34,16 @@ func SafeWriteStringField(buf *bytes.Buffer, field string) (int, error) {
 	}
 	return len(encodedField) + 1, nil
 }
+
+func SafeReadBytes(buf io.Reader, responseBytes []byte) (int, error) {
+	readBytes := 0
+	for readBytes < SERVER_MSG_SIZE {
+		n, err := buf.Read(responseBytes[readBytes:])
+		if err != nil && err != io.EOF {
+			return 0, err
+		}
+		readBytes += n
+	}
+
+	return readBytes, nil
+}

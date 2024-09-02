@@ -13,6 +13,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const SIZE_UINT16 = 2
+const SERVER_MSG_SIZE = 2
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -135,12 +136,11 @@ clientLoop:
 			return
 		}
 
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
 		log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
 			len(bets))
-		c.conn.Close()
 
-		if err != nil {
+		responseBytes := make([]byte, SERVER_MSG_SIZE)
+		if _, err := SafeReadBytes(bufio.NewReader(c.conn), responseBytes); err != nil {
 			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 				c.config.ID,
 				err,
@@ -148,10 +148,20 @@ clientLoop:
 			return
 		}
 
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msg,
-		)
+		ServerResponse := ServerResponseFromBytes(responseBytes)
+
+		if ServerResponse.AmountOfBets > 0 {
+			log.Infof("action: server_processed_bets | result: success | client_id: %v | bets_processed: %d",
+				c.config.ID,
+				ServerResponse.AmountOfBets,
+			)
+		} else {
+			log.Infof("action: server_processed_bets | result: failed | client_id: %v ",
+				c.config.ID,
+			)
+		}
+
+		c.conn.Close()
 
 		// Wait a time between sending one message and the next one
 		select {

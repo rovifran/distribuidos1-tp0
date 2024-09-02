@@ -6,6 +6,9 @@ from common.utils import Bet, store_bets
 BET_LEN_SIZE = 1
 TOTAL_BETS_LEN_SIZE = 2
 
+class ReadingBetsError(Exception):
+    pass
+
 class Server:
     def __init__(self, port, listen_backlog):
         # Initialize server socket
@@ -47,13 +50,18 @@ class Server:
             This receive is tolerant to short reads, meaning that it will keep
             reading from the socket until the full message is received
             """
-            msg = b''
-            while len(msg) < size:
-                received = client_sock.recv(size - len(msg))
-                if len(received) == 0:
-                    raise OSError("Client disconnected")
-                msg += received
-            return msg
+            try:
+                msg = b''
+                while len(msg) < size:
+                    received = client_sock.recv(size - len(msg))
+                    if len(received) == 0:
+                        raise OSError("Client disconnected")
+                    msg += received
+                return msg
+            except OSError as e:
+                raise e
+            except:
+                raise ReadingBetsError("Error reading from client")
         
         bets = []
 
@@ -71,7 +79,7 @@ class Server:
 
         return bets
 
-    def safe_send(self, client_sock):
+    def safe_send(self, client_sock, msg: int):
         """
         Sends a SUCCESS message to the client socket, tolerant to short writes 
         """
@@ -85,7 +93,7 @@ class Server:
                 sent = client_sock.send(msg)
                 msg = msg[sent:]
 
-        msg = "SUCCESS\n".encode('utf-8')
+        msg = int(msg).to_bytes(2, 'little')
         _send_all(msg)
 
     def __handle_client_connection(self, client_sock):
@@ -97,13 +105,17 @@ class Server:
         """
         try:
             bets = self.safe_receive(client_sock)
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]}') # | msg: {bet}')
+            #addr = client_sock.getpeername()
+            #logging.info(f'action: receive_message | result: success | ip: {addr[0]}')
             store_bets(bets)
-            logging.info(f'action: store_bets | result: success | amount of bets: {len(bets)}')
-            self.safe_send(client_sock)
+            logging.info(f'action: apuesta_recibida | result: success | cantidad: ${len(bets)}')
+            self.safe_send(client_sock, len(bets))
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
+        except ReadingBetsError as e:
+            logging.error(f'action: apuesta_recibida | result: fail | cantidad: $0')
+            self.safe_send(client_sock, -1)
+
         finally:
             client_sock.close()
 
