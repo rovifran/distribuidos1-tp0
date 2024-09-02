@@ -26,7 +26,8 @@ class Server:
                 client_sock = self.__accept_new_connection()
                 self.__handle_client_connection(client_sock)
             except SigTermError:
-                logging.info(f'action: SIGTERM received | result: finishing early')
+                #logging.info(f'action: SIGTERM received | result: finishing early')
+                graceful_finisher.finished = True
                 
             finally:
                 if client_sock != None:

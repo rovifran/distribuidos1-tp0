@@ -87,7 +87,7 @@ clientLoop:
 		// Wait a time between sending one message and the next one
 		select {
 		case <-c.chnl:
-			log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
+			//log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
 			break clientLoop
 
 		case <-time.After(c.config.LoopPeriod):
