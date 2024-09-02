@@ -135,36 +135,6 @@ func NewBet(agency uint8, name string, surname string, dni uint32, birthday stri
 	}
 }
 
-// safeWriteBytes Writes bytes to a buffer, ensuring that all bytes are written
-// thus tolerating short writes: keep writing until all bytes are written
-// or, if an error occurs and it is not a short write, return the error
-func (b *Bet) safeWriteBytes(buf io.Writer, bytes []byte) (int, error) {
-	writtenBytes := 0
-	for writtenBytes < len(bytes) {
-		n, err := buf.Write(bytes[writtenBytes:])
-		if err != nil && err != io.ErrShortWrite {
-			return 0, err
-		}
-		writtenBytes += n
-	}
-	return writtenBytes, nil
-}
-
-// safeWriteStringField Writes a string field to a buffer, as well as
-// its length
-func (b *Bet) safeWriteStringField(buf *bytes.Buffer, field string) (int, error) {
-	encodedFieldLen := byte(uint8(len(field)))
-	encodedField := []byte(field)
-
-	for _, field := range [][]byte{{encodedFieldLen}, encodedField} {
-		_, err := b.safeWriteBytes(buf, field)
-		if err != nil {
-			return 0, err
-		}
-	}
-	return len(encodedField) + 1, nil
-}
-
 // Encode Encodes the bet information into a byte array. If an error
 // occurs, it is returned
 func (b *Bet) Encode() ([]byte, error) {
@@ -172,36 +142,36 @@ func (b *Bet) Encode() ([]byte, error) {
 
 	agencyBytes := make([]byte, 1)
 	agencyBytes[0] = b.agency
-	_, err := b.safeWriteBytes(buf, agencyBytes)
+	_, err := SafeWriteBytes(buf, agencyBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = b.safeWriteStringField(buf, b.name)
+	_, err = SafeWriteStringField(buf, b.name)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = b.safeWriteStringField(buf, b.surname)
+	_, err = SafeWriteStringField(buf, b.surname)
 	if err != nil {
 		return nil, err
 	}
 
 	dniBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(dniBytes, b.dni)
-	_, err = b.safeWriteBytes(buf, dniBytes)
+	_, err = SafeWriteBytes(buf, dniBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = b.safeWriteStringField(buf, b.birthday)
+	_, err = SafeWriteStringField(buf, b.birthday)
 	if err != nil {
 		return nil, err
 	}
 
 	numberBytes := make([]byte, 2)
 	binary.LittleEndian.PutUint16(numberBytes, b.number)
-	_, err = b.safeWriteBytes(buf, numberBytes)
+	_, err = SafeWriteBytes(buf, numberBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -266,12 +236,12 @@ func EncodeBets(bets []*Bet) ([]byte, error) {
 			return nil, err
 		}
 
-		_, err = bet.safeWriteBytes(buf, []byte{uint8(len(encodedBet))})
+		_, err = SafeWriteBytes(buf, []byte{uint8(len(encodedBet))})
 		if err != nil {
 			return nil, err
 		}
 
-		_, err = bet.safeWriteBytes(buf, encodedBet)
+		_, err = SafeWriteBytes(buf, encodedBet)
 		if err != nil {
 			return nil, err
 		}

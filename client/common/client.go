@@ -62,8 +62,8 @@ func (c *Client) createClientSocket() error {
 // SendBets Sends the bet to the server, ensuring all the bytes
 // are sent. if an error occurs, it is loggedand the function
 // returns an error
-func (c *Client) sendBets(bets *Bet) error {
-	encodedBet, err := bets.Encode()
+func (c *Client) sendBets(bets []*Bet) error {
+	encodedBets, err := EncodeBets(bets)
 	if err != nil {
 		log.Errorf("action: encode_bet | result: fail | client_id: %v | error: %v",
 			c.config.ID,
@@ -73,8 +73,8 @@ func (c *Client) sendBets(bets *Bet) error {
 	}
 
 	encodedBytesLen := make([]byte, SIZE_UINT16)
-	binary.LittleEndian.PutUint16(encodedBytesLen, uint16(len(encodedBet)))
-	_, err = bets.safeWriteBytes(c.conn, encodedBytesLen)
+	binary.LittleEndian.PutUint16(encodedBytesLen, uint16(len(encodedBets)))
+	_, err = SafeWriteBytes(c.conn, encodedBytesLen)
 	if err != nil {
 		log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
 			c.config.ID,
@@ -83,7 +83,7 @@ func (c *Client) sendBets(bets *Bet) error {
 		return err
 	}
 
-	_, err = bets.safeWriteBytes(c.conn, encodedBet)
+	_, err = SafeWriteBytes(c.conn, encodedBets)
 	if err != nil {
 		log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
 			c.config.ID,
@@ -103,7 +103,7 @@ func (c *Client) StartClientLoop() {
 	defer c.betReader.CloseFile()
 
 clientLoop:
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+	for !c.betReader.Finished {
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
 
@@ -111,7 +111,7 @@ clientLoop:
 		bets := c.betReader.ReadBets()
 
 		// Send the bet to the server
-		err := c.sendBets(bets[0])
+		err := c.sendBets(bets)
 		if err != nil {
 			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
 				c.config.ID,
