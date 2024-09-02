@@ -105,8 +105,6 @@ class Server:
         """
         try:
             bets = self.safe_receive(client_sock)
-            #addr = client_sock.getpeername()
-            #logging.info(f'action: receive_message | result: success | ip: {addr[0]}')
             store_bets(bets)
             logging.info(f'action: apuesta_recibida | result: success | cantidad: ${len(bets)}')
             self.safe_send(client_sock, len(bets))

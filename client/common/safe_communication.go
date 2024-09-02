@@ -35,10 +35,17 @@ func SafeWriteStringField(buf *bytes.Buffer, field string) (int, error) {
 	return len(encodedField) + 1, nil
 }
 
+// SafeReadBytes Reads bytes from a buffer, ensuring that all bytes are read
+// thus tolerating short reads: keep reading until all bytes are written in the buffer 
+// or, if an error occurs and it is not a short read, return the error
 func SafeReadBytes(buf io.Reader, responseBytes []byte) (int, error) {
 	readBytes := 0
 	for readBytes < SERVER_MSG_SIZE {
 		n, err := buf.Read(responseBytes[readBytes:])
+		if n == 0 && err == io.EOF{
+			break
+		}
+
 		if err != nil && err != io.EOF {
 			return 0, err
 		}
