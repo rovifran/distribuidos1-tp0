@@ -1,5 +1,6 @@
 import socket
 import logging
+from typing import Dict, List
 from common.graceful_finisher import GracefulFinisher, SigTermError
 from common.utils import Bet, store_bets, WinnerPicker
 
@@ -21,6 +22,18 @@ class Server:
         self._agency_sockets = {}
         self._server_socket.settimeout(30)
         self._server_socket.listen(listen_backlog)
+
+    def store_agency_socket(self, agency_id, agency_socket):
+        
+        self._agency_sockets[agency_id] = agency_socket
+
+    def announce_winners_to_agencies(self, winners: Dict[int, List[int]]):
+        for agency_id, winners in winners.items():
+            agency_socket = self._agency_sockets.get(agency_id)
+            if agency_socket:
+                # Send the message with the encoded winners
+                # agency_socket.send(win
+                pass
 
     def run(self):
         """
