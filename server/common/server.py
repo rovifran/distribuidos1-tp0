@@ -1,7 +1,7 @@
 import socket
 import logging
 from common.graceful_finisher import GracefulFinisher, SigTermError
-from common.utils import Bet, store_bets
+from common.utils import Bet, store_bets, WinnerPicker
 
 BET_LEN_SIZE = 1
 TOTAL_BETS_LEN_SIZE = 2
@@ -10,10 +10,16 @@ class ReadingBetsError(Exception):
     pass
 
 class Server:
+    """
+    Initializes the server socket. The server socket is a TCP socket
+    with a timeout associated that serves as a lottery winner syncronizer.
+    """
     def __init__(self, port, listen_backlog):
         # Initialize server socket
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
+        self._agency_sockets = {}
+        self._server_socket.settimeout(30)
         self._server_socket.listen(listen_backlog)
 
     def run(self):
@@ -26,6 +32,7 @@ class Server:
         """
 
         graceful_finisher = GracefulFinisher()
+        winner_picker = WinnerPicker()
 
         while not graceful_finisher.finished:
             try:
@@ -33,6 +40,12 @@ class Server:
                 self.__handle_client_connection(client_sock)
             except SigTermError:
                 logging.info(f'action: SIGTERM received | result: finishing early')
+            except TimeoutError:
+                # This case is assumed to be the lottery time
+                winner_picker.determine_winners()
+                logging.info(f'action: lottery_time | result: winners_determined | winners: {winner_picker.get_winners()}')
+                winners = winner_picker.get_winners()
+                # TODO: send winners to clients according to agency and close connections
                 
             finally:
                 if client_sock != None:
