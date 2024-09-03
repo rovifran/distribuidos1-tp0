@@ -13,7 +13,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const SIZE_UINT16 = 2
-const SERVER_MSG_SIZE = 2
+const SERVER_MSG_SIZE = 4
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -96,6 +96,18 @@ func (c *Client) sendBets(bets []*Bet) error {
 	return nil
 }
 
+func (c *Client) sendWaitingForLotteryMessage() error {
+	if _, err := SafeWriteBytes(c.conn, []byte{1}); err != nil {
+		return err
+	}
+
+	if _, err := SafeWriteBytes(c.conn, []byte{c.betReader.agency}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (c *Client) obtainBetsFilePath() string {
 	return "/data/agency-" + c.config.ID + ".csv"
 }
@@ -114,7 +126,6 @@ func (c *Client) StartClientLoop() {
 
 	defer c.betReader.CloseFile()
 
-clientLoop:
 	for !c.betReader.Finished {
 		// Create the connection the server in every loop iteration. Send an
 		if err := c.createClientSocket(); err != nil {
@@ -179,7 +190,7 @@ clientLoop:
 		select {
 		case <-c.chnl:
 			log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
-			break clientLoop
+			return
 
 		case <-time.After(c.config.LoopPeriod):
 			continue
@@ -187,4 +198,42 @@ clientLoop:
 
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+
+	// Creates the last socket to the server to send the waiting for lottery message
+	if err := c.createClientSocket(); err != nil {
+		log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+
+	if err := c.sendWaitingForLotteryMessage(); err != nil {
+		log.Errorf("action: send_waiting_for_lottery | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+
+	log.Infof("action: waiting_for_lottery | result: success | client_id: %v", c.config.ID)
+
+	response := make([]byte, SERVER_MSG_SIZE)
+	if _, err := SafeReadBytes(bufio.NewReader(c.conn), response); err != nil {
+		log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+		return
+	}
+
+	serverResponse := ServerResponseFromBytes(response)
+
+	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
+		len(serverResponse.Winners))
+
+	c.conn.Close()
+
+	log.Infof("action: client_finished | result: success | client_id: %v", c.config.ID)
+
 }
