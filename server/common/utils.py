@@ -70,6 +70,21 @@ def _decodeStringField(bytes: bytes, pos: int) -> Tuple[str, int]:
     return bytes[pos : pos + length].decode('utf-8'), pos + length
     
 
+class WinnerPicker:
+    def __init__(self):
+        self.winners_per_agency = {}
+
+    def add_winner(self, agency: int, dni: int):
+        self.winners_per_agency.get(agency, []).append(dni)
+
+    def get_winners(self):
+        return self.winners_per_agency
+    
+    def determine_winners(self):
+        for bet in load_bets():
+            if has_won(bet):
+                self.add_winner(bet.agency, bet.document)
+
 """ Checks whether a bet won the prize or not. """
 def has_won(bet: Bet) -> bool:
     return bet.number == LOTTERY_WINNER_NUMBER
@@ -94,5 +109,3 @@ def load_bets() -> list[Bet]:
         reader = csv.reader(file, quoting=csv.QUOTE_MINIMAL)
         for row in reader:
             yield Bet(row[0], row[1], row[2], row[3], row[4], row[5])
-
-Bet.decodeBytes(bytes([1,4,74,111,104,110,4,80,111,114,107,21,205,91,7,10,49,57,56,48,45,48,49,45,48,49,42,0]))
