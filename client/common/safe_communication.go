@@ -61,7 +61,7 @@ func SafeReadVariableBytes(buf io.Reader, responseBytes []byte) ([]byte, error) 
 	msgLenBytes := make([]byte, LEN_SERVER_MSG_SIZE)
 	n, err := SafeReadBytes(buf, msgLenBytes, LEN_SERVER_MSG_SIZE)
 	if n == 0 && err == io.EOF {
-		return nil, err
+		return make([]byte, 0), err
 	}
 
 	if err != nil {

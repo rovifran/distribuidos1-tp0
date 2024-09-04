@@ -130,14 +130,20 @@ func (c *Client) StartClientLoop() {
 	defer c.betReader.CloseFile()
 
 	for !c.betReader.Finished {
-		// Create the connection the server in every loop iteration. Send an
-		if err := c.createClientSocket(); err != nil {
-			log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
-		}
+		func () {
+			// Create the connection the server in every loop iteration. Send an
+			if err := c.createClientSocket(); err != nil {
+				log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
+		}()
+
+		// This closes the socket on every iteration so we dont have to worry about
+		// closing it manually on every case that we want to cut the connection
+		defer c.conn.Close() 
 
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
@@ -187,8 +193,6 @@ func (c *Client) StartClientLoop() {
 			)
 		}
 
-		c.conn.Close()
-
 		// Wait a time between sending one message and the next one
 		select {
 		case <-c.chnl:
@@ -221,18 +225,39 @@ func (c *Client) StartClientLoop() {
 
 	log.Infof("action: waiting_for_lottery | result: success | client_id: %v", c.config.ID)
 
+	lotteryChannel := make(chan []byte)
+	
 	response := make([]byte, LEN_SERVER_MSG_SIZE)
-	res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
+	go func () {
+		res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
+		if len(res) == 0 {
+			log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
+				c.config.ID,
+			)
+			return
+		}
 
-	if err != nil {
-		log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
+		if err != nil {
+			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			return
+		}
+		
+		lotteryChannel <- res
+	}()
+
+	var serverResponse *ServerResponse
+	select {
+	case <-c.chnl:
+		log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
+		c.conn.Close()
 		return
-	}
 
-	serverResponse := ServerResponseFromBytes(res)
+	case res := <-lotteryChannel:
+		serverResponse = ServerResponseFromBytes(res)
+	}
 
 	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
 		len(serverResponse.Winners))
