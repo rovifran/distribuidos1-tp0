@@ -129,8 +129,9 @@ func (c *Client) StartClientLoop() {
 
 	defer c.betReader.CloseFile()
 
-	for !c.betReader.Finished {
-		func () {
+mainCLientLoop:
+	for {
+		func() {
 			// Create the connection the server in every loop iteration. Send an
 			if err := c.createClientSocket(); err != nil {
 				log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
@@ -142,128 +143,121 @@ func (c *Client) StartClientLoop() {
 		}()
 
 		// This closes the socket on every iteration so we dont have to worry about
-		// closing it manually on every case that we want to cut the connection
-		defer c.conn.Close() 
+		// closing it manually on every case that we want to cut the connection.
+		// That is why we enclosed the socket creation in a function, so this defer can
+		// close the socket in every case
+		defer c.conn.Close()
 
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
 
-		// Send the bet to the server
-		err := c.sendBets(bets)
-		if err != nil {
-			log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
-		}
+		if len(bets) != 0 {
+			// Having to send bets means that the client has not finished yet
+			err := c.sendBets(bets)
+			if err != nil {
+				log.Errorf("action: send_bet | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
 
-		log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
-			len(bets))
+			log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
+				len(bets))
 
-		responseBytes := make([]byte, LEN_SERVER_MSG_SIZE)
+			responseBytes := make([]byte, LEN_SERVER_MSG_SIZE)
 
-		res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), responseBytes)
+			res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), responseBytes)
 
-		if res == nil {
-			log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
-				c.config.ID,
-			)
-			return
-		}
+			if res == nil {
+				log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
+					c.config.ID,
+				)
+				return
+			}
 
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
-		}
+			if err != nil {
+				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
 
-		ServerResponse := ServerResponseFromBytes(res)
+			ServerResponse := ServerResponseFromBytes(res)
 
-		if ServerResponse.AmountOfBets > 0 {
-			log.Infof("action: server_processed_bets | result: success | client_id: %v | bets_processed: %d",
-				c.config.ID,
-				ServerResponse.AmountOfBets,
-			)
+			if ServerResponse.AmountOfBets > 0 {
+				log.Infof("action: server_processed_bets | result: success | client_id: %v | bets_processed: %d",
+					c.config.ID,
+					ServerResponse.AmountOfBets,
+				)
+			} else {
+				log.Infof("action: server_processed_bets | result: failed | client_id: %v ",
+					c.config.ID,
+				)
+			}
+
+			// Wait a time between sending one message and the next one
+			select {
+			case <-c.chnl:
+				log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
+				break mainCLientLoop
+
+			case <-time.After(c.config.LoopPeriod):
+				continue
+			}
 		} else {
-			log.Infof("action: server_processed_bets | result: failed | client_id: %v ",
-				c.config.ID,
-			)
+			// Lottery time!
+			if err := c.sendWaitingForLotteryMessage(); err != nil {
+				log.Errorf("action: send_waiting_for_lottery | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
+
+			log.Infof("action: waiting_for_lottery | result: success | client_id: %v", c.config.ID)
+
+			lotteryChannel := make(chan []byte)
+
+			response := make([]byte, LEN_SERVER_MSG_SIZE)
+			go func() {
+				res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
+				if len(res) == 0 {
+					log.Infof("action: receive_message | result: server disconnected | client_id: %v",
+						c.config.ID,
+					)
+					return
+				}
+
+				if err != nil {
+					log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+						c.config.ID,
+						err,
+					)
+					return
+				}
+
+				lotteryChannel <- res
+			}()
+
+			var serverResponse *ServerResponse
+			select {
+			case <-c.chnl:
+				log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
+				c.conn.Close()
+				break mainCLientLoop
+
+			case res := <-lotteryChannel:
+				serverResponse = ServerResponseFromBytes(res)
+			}
+
+			log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
+				len(serverResponse.Winners))
+
+				break mainCLientLoop
 		}
-
-		// Wait a time between sending one message and the next one
-		select {
-		case <-c.chnl:
-			log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
-			return
-
-		case <-time.After(c.config.LoopPeriod):
-			continue
-		}
-
 	}
-	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
-
-	// Creates the last socket to the server to send the waiting for lottery message
-	if err := c.createClientSocket(); err != nil {
-		log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
-		return
-	}
-
-	if err := c.sendWaitingForLotteryMessage(); err != nil {
-		log.Errorf("action: send_waiting_for_lottery | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
-		return
-	}
-
-	log.Infof("action: waiting_for_lottery | result: success | client_id: %v", c.config.ID)
-
-	lotteryChannel := make(chan []byte)
-	
-	response := make([]byte, LEN_SERVER_MSG_SIZE)
-	go func () {
-		res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
-		if len(res) == 0 {
-			log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
-				c.config.ID,
-			)
-			return
-		}
-
-		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
-		}
-		
-		lotteryChannel <- res
-	}()
-
-	var serverResponse *ServerResponse
-	select {
-	case <-c.chnl:
-		log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
-		c.conn.Close()
-		return
-
-	case res := <-lotteryChannel:
-		serverResponse = ServerResponseFromBytes(res)
-	}
-
-	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
-		len(serverResponse.Winners))
-
-	c.conn.Close()
 
 	log.Infof("action: client_finished | result: success | client_id: %v", c.config.ID)
-
 }
