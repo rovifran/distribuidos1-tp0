@@ -1,6 +1,6 @@
 import socket
 import logging
-from common.graceful_finisher import GracefulFinisher, SigTermError
+from common.graceful_finisher import SigTermSignalBinder, SigTermError
 
 
 class Server:
@@ -9,6 +9,9 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+
+    def finish_gracefully(self):
+        self._server_socket.close()
 
     def run(self):
         """
@@ -19,19 +22,24 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        graceful_finisher = GracefulFinisher()
+        sigterm_binder = SigTermSignalBinder()
+        client_sock = None
 
-        while not graceful_finisher.finished:
+        while not sigterm_binder.finished:
             try:
                 client_sock = self.__accept_new_connection()
                 self.__handle_client_connection(client_sock)
             except SigTermError:
                 #logging.info(f'action: SIGTERM received | result: finishing early')
-                graceful_finisher.finished = True
-                
+                break
+
+
             finally:
                 if client_sock != None:
                     client_sock.close()
+                    client_sock = None
+
+        self.finish_gracefully()
 
 
     def __handle_client_connection(self, client_sock):
