@@ -34,6 +34,7 @@ class ClientMessageDecoder:
         """
         # There is no need to decode data, as it is only one byte and it is the agency
         cmd = ClientMessageDecoder()
+        cmd.client_agency = int(data[0])
         cmd.set_waiting_for_lottery(True)
         return cmd
     

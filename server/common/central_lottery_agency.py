@@ -8,6 +8,8 @@ class CentralLotteryAgency:
         store_bets(bets)
 
     def _add_winner(self, agency: int, dni: int):
+        if agency not in self.winners_per_agency:
+            self.winners_per_agency[agency] = []
         self.winners_per_agency.get(agency, []).append(dni)
 
     def get_winners(self):

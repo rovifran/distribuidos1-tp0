@@ -97,7 +97,10 @@ func (c *Client) sendBets(bets []*Bet) error {
 }
 
 func (c *Client) sendWaitingForLotteryMessage() error {
-	if _, err := SafeWriteBytes(c.conn, []byte{1}); err != nil {
+	encodedBytesLen := make([]byte, SIZE_UINT16)
+	binary.LittleEndian.PutUint16(encodedBytesLen, uint16(1))
+
+	if _, err := SafeWriteBytes(c.conn, encodedBytesLen); err != nil {
 		return err
 	}
 
@@ -109,7 +112,8 @@ func (c *Client) sendWaitingForLotteryMessage() error {
 }
 
 func (c *Client) obtainBetsFilePath() string {
-	return "/data/agency-" + c.config.ID + ".csv"
+	// return "/data/agency-" + c.config.ID + ".csv"
+	return "/data/agency-" + "5" + ".csv"
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
@@ -228,6 +232,8 @@ func (c *Client) StartClientLoop() {
 	}
 
 	serverResponse := ServerResponseFromBytes(response)
+
+	log.Infof("mensaje: %+v", response)
 
 	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
 		len(serverResponse.Winners))
