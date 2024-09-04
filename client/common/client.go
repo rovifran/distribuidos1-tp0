@@ -113,7 +113,7 @@ func (c *Client) sendWaitingForLotteryMessage() error {
 
 func (c *Client) obtainBetsFilePath() string {
 	// return "/data/agency-" + c.config.ID + ".csv"
-	return "/data/agency-" + "5" + ".csv"
+	return "/data/agencytest-" + c.config.ID + ".csv"
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met

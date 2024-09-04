@@ -31,12 +31,13 @@ class Server:
         self._agency_sockets[agency_id] = agency_socket
 
     def announce_winners_to_agencies(self, winners: Dict[int, List[int]]):
-        for agency_id, winners in winners.items():
-            agency_socket = self._agency_sockets.get(agency_id)
-            if agency_socket:
-                self.safe_send(agency_socket, self.create_winners_message(winners))
-                logging.info(f'action: winners_announced | result: success | agency: ${agency_id} | winners: ${len(winners)}')
-                agency_socket.close()
+        winners = self.central_lottery_agency.get_winners()
+        for agency_id, agency_socket in self._agency_sockets.items():
+            winners_dnis = winners.get(agency_id, [])
+            logging.info(f"winners: {self.create_winners_message(winners_dnis)}")
+            self.safe_send(agency_socket, self.create_winners_message(winners_dnis))
+            logging.info(f'action: winners_announced | result: success | agency: ${agency_id} | winners: ${len(winners)}')
+            agency_socket.close()
 
     def run(self):
         """
@@ -126,7 +127,7 @@ class Server:
             winners_bytes += int(winner).to_bytes(4, 'little')
         
         winners_bytes = int(len(winners)).to_bytes(2, 'little') + winners_bytes
-
+        
         return int(len(winners_bytes)).to_bytes(2, 'little') + winners_bytes
 
     def create_bets_answer(self, quantity: int) -> bytearray:
