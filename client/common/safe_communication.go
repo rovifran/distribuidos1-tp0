@@ -68,21 +68,19 @@ func SafeReadVariableBytes(buf io.Reader, responseBytes []byte) ([]byte, error) 
 		return nil, err
 	}
 
-	log.Infof("llegue aca")
 	readBytes += n
 	msglen := binary.LittleEndian.Uint16(msgLenBytes)
 	msgBytes := make([]byte, msglen)
 	res := make([]byte, msglen)
 	n, err = SafeReadBytes(buf, msgBytes, int(msglen))
 	if n == 0 && err == io.EOF {
-		return nil, nil
+		return make([]byte, 0), err
 	}
-	log.Infof("ahora llegue aca")
-
-	copy(res, msgBytes)
 	if err != nil {
 		return nil, err
 	}
+
+	copy(res, msgBytes)
 
 	readBytes += n
 	return res, nil

@@ -7,8 +7,7 @@ from typing import Tuple
 """ Bets storage location. """
 STORAGE_FILEPATH = "bets.csv"
 """ Simulated winner number in the lottery contest. """
-# LOTTERY_WINNER_NUMBER = 7574
-LOTTERY_WINNER_NUMBER = 7027
+LOTTERY_WINNER_NUMBER = 7574
 
 BYTES_OF_UINT8 = 1
 BYTES_OF_UINT16 = 2

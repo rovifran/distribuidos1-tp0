@@ -1,7 +1,7 @@
 import socket
 import logging
 from typing import Dict, List
-from common.graceful_finisher import GracefulFinisher, SigTermError
+from common.graceful_finisher import SigTermSignalBinder, SigTermError
 from common.utils import Bet
 from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
@@ -34,10 +34,16 @@ class Server:
         winners = self.central_lottery_agency.get_winners()
         for agency_id, agency_socket in self._agency_sockets.items():
             winners_dnis = winners.get(agency_id, [])
-            logging.info(f"winners: {self.create_winners_message(winners_dnis)}")
             self.safe_send(agency_socket, self.create_winners_message(winners_dnis))
-            logging.info(f'action: winners_announced | result: success | agency: ${agency_id} | winners: ${len(winners)}')
+            logging.info(f'action: winners_announced | result: success | agency: {agency_id} | winners: {len(winners_dnis)}')
             agency_socket.close()
+
+    def finish_gracefully(self, client_sock):
+        self._server_socket.close()
+        for agency_socket in self._agency_sockets.values():
+            agency_socket.close()
+        if client_sock:
+            client_sock.close()
 
     def run(self):
         """
@@ -48,27 +54,30 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        graceful_finisher = GracefulFinisher()
+        sigterm_binder = SigTermSignalBinder()
         client_sock = None
 
-        while not graceful_finisher.finished:
+        while not sigterm_binder.sigterm_received:
             try:
                 client_sock = self.__accept_new_connection()
                 self.__handle_client_connection(client_sock)
             except SigTermError:
                 logging.info(f'action: SIGTERM received | result: finishing early')
+                break # It's not needed here because the signal triggers the sigterm_received flag, but it is more explicit this way.
             except socket.timeout:
                 # This case is assumed to be the lottery time
                 self.central_lottery_agency.determine_winners()
                 logging.info(f'action: lottery_time | result: winners_determined')
                 winners = self.central_lottery_agency.get_winners()
                 self.announce_winners_to_agencies(winners)
-                return
+                break
                 
             finally:
-                pass
-                # if client_sock and not self.:
-                #     client_sock.close()
+                if client_sock and client_sock not in self._agency_sockets.values():
+                    client_sock.close()
+                    client_sock = None
+                
+        self.finish_gracefully(client_sock)
 
     def safe_receive(self, client_sock) -> Bet:
         """
@@ -116,12 +125,11 @@ class Server:
 
         _send_all(data)
 
-    def create_winners_message(self, winners: List[int]) -> bytearray:
+    def create_winners_message(self, winners: List[int] ) -> bytearray:
         """
         Creates a bytearray with the length of the winners. This bytearray is
         sent to the agency to acknowledge the winners of the lottery.
         """
-        logging.info(f"winners: {winners}")
         winners_bytes = b''
         for winner in winners:
             winners_bytes += int(winner).to_bytes(4, 'little')
@@ -136,7 +144,6 @@ class Server:
         sent to the client to acknowledge the bets received.
         """
         msg = int(FIRST_FIELD_SIZE).to_bytes(2, 'little') + int(quantity).to_bytes(2, 'little')
-        logging.info(f"mensaje a mandar: {msg}")
         return msg
 
     def __handle_client_connection(self, client_sock):
