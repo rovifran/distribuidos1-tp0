@@ -2,12 +2,15 @@ import socket
 import logging
 from typing import Dict, List
 from common.graceful_finisher import GracefulFinisher, SigTermError
-from common.utils import Bet, store_bets, WinnerPicker
+from common.utils import Bet
+from common.central_lottery_agency import CentralLotteryAgency
+from common.client_message import ClientMessageDecoder
 
 BET_LEN_SIZE = 1
-TOTAL_BETS_LEN_SIZE = 2
+MSG_LEN_SIZE = 2
+FIRST_FIELD_SIZE = 2
 
-class ReadingBetsError(Exception):
+class ReadingMessageError(Exception):
     pass
 
 class Server:
@@ -22,6 +25,7 @@ class Server:
         self._agency_sockets = {}
         self._server_socket.settimeout(30)
         self._server_socket.listen(listen_backlog)
+        self.central_lottery_agency = CentralLotteryAgency()
 
     def store_agency_socket(self, agency_id, agency_socket):
         
@@ -45,7 +49,6 @@ class Server:
         """
 
         graceful_finisher = GracefulFinisher()
-        winner_picker = WinnerPicker()
 
         while not graceful_finisher.finished:
             try:
@@ -55,14 +58,14 @@ class Server:
                 logging.info(f'action: SIGTERM received | result: finishing early')
             except TimeoutError:
                 # This case is assumed to be the lottery time
-                winner_picker.determine_winners()
-                logging.info(f'action: lottery_time | result: winners_determined | winners: {winner_picker.get_winners()}')
-                winners = winner_picker.get_winners()
+                self.central_lottery_agency.determine_winners()
+                logging.info(f'action: lottery_time | result: winners_determined')
+                winners = self.central_lottery_agency.get_winners()
                 # TODO: send winners to clients according to agency and close connections
                 
             finally:
-                if client_sock != None:
-                    client_sock.close()
+                # if client_sock != None:
+                client_sock.close()
 
     def safe_receive(self, client_sock) -> Bet:
         """
@@ -87,25 +90,14 @@ class Server:
             except OSError as e:
                 raise e
             except:
-                raise ReadingBetsError("Error reading from client")
-        
-        bets = []
+                raise ReadingMessageError("Error reading from client")
 
-        total_bets_len_bytes = _receive_all(TOTAL_BETS_LEN_SIZE)
-        total_bets_len = int.from_bytes(total_bets_len_bytes, 'little')
+        msg_len_bytes = _receive_all(MSG_LEN_SIZE)
+        msg_len = int.from_bytes(msg_len_bytes, 'little')
 
-        total_read = 0
-        while total_read < total_bets_len:
-            bet_len_bytes = _receive_all(BET_LEN_SIZE)
-            bet_len = int.from_bytes(bet_len_bytes, 'little')
-            bet_bytes = _receive_all(bet_len)
-            bet = Bet.decodeBytes(bet_bytes)
-            bets.append(bet)
-            total_read += bet_len + BET_LEN_SIZE
+        return _receive_all(msg_len)
 
-        return bets
-
-    def safe_send(self, client_sock, msg: int):
+    def safe_send(self, client_sock, data):
         """
         Sends a SUCCESS message to the client socket, tolerant to short writes 
         """
@@ -119,8 +111,14 @@ class Server:
                 sent = client_sock.send(msg)
                 msg = msg[sent:]
 
-        msg = int(msg).to_bytes(2, 'little')
-        _send_all(msg)
+        _send_all(data)
+
+    def create_bets_answer(self, quantity: int) -> bytearray:
+        """
+        Creates a bytearray with the length of the bets. This bytearray is
+        sent to the client to acknowledge the bets received.
+        """
+        return int(FIRST_FIELD_SIZE).to_bytes(2, 'little') + int(quantity).to_bytes(2, 'little')
 
     def __handle_client_connection(self, client_sock):
         """
@@ -130,17 +128,24 @@ class Server:
         client socket will also be closed
         """
         try:
-            bets = self.safe_receive(client_sock)
-            store_bets(bets)
-            logging.info(f'action: apuesta_recibida | result: success | cantidad: ${len(bets)}')
-            self.safe_send(client_sock, len(bets))
+            client_data = self.safe_receive(client_sock)
+            client_message = ClientMessageDecoder.decode_client_message(client_data)
+
+            if not client_message.waiting_for_lottery:
+                bets = client_message.bets
+                self.central_lottery_agency.add_bets(bets)
+                logging.info(f'action: apuesta_recibida | result: success | cantidad: ${len(bets)}')
+                self.safe_send(client_sock, self.create_bets_answer(len(bets)))
+                return
+                
         except OSError as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
-        except ReadingBetsError as e:
+        except ReadingMessageError as e:
             logging.error(f'action: apuesta_recibida | result: fail | cantidad: $0')
-            self.safe_send(client_sock, -1)
+            self.safe_send(client_sock, self.create_bets_answer(-1))
 
         finally:
+            # if client_message and not client_message.waiting_for_lottery:
             client_sock.close()
 
     def __accept_new_connection(self):
