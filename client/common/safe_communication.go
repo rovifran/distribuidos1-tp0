@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"encoding/binary"
 	"io"
 )
 
@@ -36,13 +37,13 @@ func SafeWriteStringField(buf *bytes.Buffer, field string) (int, error) {
 }
 
 // SafeReadBytes Reads bytes from a buffer, ensuring that all bytes are read
-// thus tolerating short reads: keep reading until all bytes are written in the buffer 
+// thus tolerating short reads: keep reading until all bytes are written in the buffer
 // or, if an error occurs and it is not a short read, return the error
-func SafeReadBytes(buf io.Reader, responseBytes []byte) (int, error) {
+func SafeReadBytes(buf io.Reader, responseBytes []byte, bytesToRead int) (int, error) {
 	readBytes := 0
-	for readBytes < SERVER_MSG_SIZE {
+	for readBytes < bytesToRead {
 		n, err := buf.Read(responseBytes[readBytes:])
-		if n == 0 && err == io.EOF{
+		if n == 0 && err == io.EOF {
 			break
 		}
 
@@ -53,4 +54,36 @@ func SafeReadBytes(buf io.Reader, responseBytes []byte) (int, error) {
 	}
 
 	return readBytes, nil
+}
+
+func SafeReadVariableBytes(buf io.Reader, responseBytes []byte) ([]byte, error) {
+	readBytes := 0
+	msgLenBytes := make([]byte, LEN_SERVER_MSG_SIZE)
+	n, err := SafeReadBytes(buf, msgLenBytes, LEN_SERVER_MSG_SIZE)
+	if n == 0 && err == io.EOF {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("llegue aca")
+	readBytes += n
+	msglen := binary.LittleEndian.Uint16(msgLenBytes)
+	msgBytes := make([]byte, msglen)
+	res := make([]byte, msglen)
+	n, err = SafeReadBytes(buf, msgBytes, int(msglen))
+	if n == 0 && err == io.EOF {
+		return nil, nil
+	}
+	log.Infof("ahora llegue aca")
+
+	copy(res, msgBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	readBytes += n
+	return res, nil
 }

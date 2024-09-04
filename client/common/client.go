@@ -13,7 +13,7 @@ import (
 var log = logging.MustGetLogger("log")
 
 const SIZE_UINT16 = 2
-const SERVER_MSG_SIZE = 4
+const LEN_SERVER_MSG_SIZE = 2
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -156,11 +156,11 @@ func (c *Client) StartClientLoop() {
 		log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
 			len(bets))
 
-		responseBytes := make([]byte, SERVER_MSG_SIZE)
+		responseBytes := make([]byte, LEN_SERVER_MSG_SIZE)
 
-		n, err := SafeReadBytes(bufio.NewReader(c.conn), responseBytes)
+		res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), responseBytes)
 
-		if n == 0 {
+		if res == nil {
 			log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
 				c.config.ID,
 			)
@@ -175,7 +175,7 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		ServerResponse := ServerResponseFromBytes(responseBytes)
+		ServerResponse := ServerResponseFromBytes(res)
 
 		if ServerResponse.AmountOfBets > 0 {
 			log.Infof("action: server_processed_bets | result: success | client_id: %v | bets_processed: %d",
@@ -222,8 +222,10 @@ func (c *Client) StartClientLoop() {
 
 	log.Infof("action: waiting_for_lottery | result: success | client_id: %v", c.config.ID)
 
-	response := make([]byte, SERVER_MSG_SIZE)
-	if _, err := SafeReadBytes(bufio.NewReader(c.conn), response); err != nil {
+	response := make([]byte, LEN_SERVER_MSG_SIZE)
+	res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
+
+	if err != nil {
 		log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 			c.config.ID,
 			err,
@@ -231,9 +233,7 @@ func (c *Client) StartClientLoop() {
 		return
 	}
 
-	serverResponse := ServerResponseFromBytes(response)
-
-	log.Infof("mensaje: %+v", response)
+	serverResponse := ServerResponseFromBytes(res)
 
 	log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
 		len(serverResponse.Winners))

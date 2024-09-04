@@ -28,7 +28,7 @@ func NewServerResponse(amountOfBets int16, winners []uint32) *ServerResponse {
 // because each winner is represented as an uint32
 func ServerResponseFromBytes(data []byte) *ServerResponse {
 	buf := bytes.NewBuffer(data)
-	serverMsgLen := binary.LittleEndian.Uint16(buf.Next(SIZE_UINT16))
+	serverMsgLen := len(data)
 
 	// result can hold either the amount of bets processed or the amount of winners
 	result := int16(binary.LittleEndian.Uint16(buf.Next(SIZE_UINT16)))
