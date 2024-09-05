@@ -1,6 +1,6 @@
 import socket
 import logging
-from common.graceful_finisher import GracefulFinisher, SigTermError
+from common.sigterm_binding import SigTermSignalBinder, SigTermError
 from common.utils import Bet, store_bets
 
 BET_LEN_SIZE = 1
@@ -16,6 +16,9 @@ class Server:
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
 
+    def finish_gracefully(self):
+        self._server_socket.close()
+
     def run(self):
         """
         Dummy Server loop
@@ -25,18 +28,21 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        graceful_finisher = GracefulFinisher()
+        sigterm_binder = SigTermSignalBinder()
+        client_sock = None
 
-        while not graceful_finisher.finished:
+        while not sigterm_binder.finished:
             try:
                 client_sock = self.__accept_new_connection()
                 self.__handle_client_connection(client_sock)
             except SigTermError:
-                logging.info(f'action: SIGTERM received | result: finishing early')
+                logging.info(f'action: program finishing early | result: success')
+                break
                 
             finally:
                 if client_sock != None:
                     client_sock.close()
+                    client_sock = None
 
     def safe_receive(self, client_sock) -> Bet:
         """
