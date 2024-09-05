@@ -4,10 +4,11 @@ from typing import Dict, List, Tuple
 import common
 from common.sigterm_binding import SigTermSignalBinder, SigTermError
 import common.sigterm_binding
+from common.safe_communication import safe_receive, safe_send
 from common.utils import Bet, store_bets, store_bets_for_lottery
 from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
-from multiprocessing import Manager, Process, Pool, Lock, Queue
+from multiprocessing import Process, Lock, Queue
 from time import sleep
 
 BET_LEN_SIZE = 1
@@ -59,7 +60,7 @@ class Server:
     the agency id as arguments, and closes the corresponding socket.
     """
     def _announce_winners_to_agency(self, agency_socket, agency_id, winners: List[int]):
-        self.safe_send(agency_socket, self.create_winners_message(winners))
+        safe_send(agency_socket, self.create_winners_message(winners))
         logging.info(f'action: winners_announced | result: success | agency: {agency_id} | winners: {len(winners)}')
         agency_socket.close()
 
@@ -161,52 +162,6 @@ class Server:
         # In multiprocessing each process should close its own client socket before finishing
         self.finish_gracefully()
 
-    def safe_receive(self, client_sock) -> Bet:
-        """
-        Receives the message from the client socket following the protocol:
-        - The first 2 bytes are the length of the message
-        - The next N bytes are the message itself
-        """
-
-        def _receive_all(size):
-            """
-            This receive is tolerant to short reads, meaning that it will keep
-            reading from the socket until the full message is received
-            """
-            try:
-                msg = b''
-                while len(msg) < size:
-                    received = client_sock.recv(size - len(msg))
-                    if len(received) == 0:
-                        raise OSError("Client disconnected")
-                    msg += received
-                return msg
-            except OSError as e:
-                raise e
-            except:
-                raise ReadingMessageError("Error reading from client")
-
-        msg_len_bytes = _receive_all(MSG_LEN_SIZE)
-        msg_len = int.from_bytes(msg_len_bytes, 'little')
-
-        return _receive_all(msg_len)
-
-    def safe_send(self, client_sock, data):
-        """
-        Sends a SUCCESS message to the client socket, tolerant to short writes 
-        """
-
-        def _send_all(msg):
-            """
-            This send is tolerant to short writes, meaning that it will keep
-            writing to the socket until the full message is sent
-            """
-            while len(msg) > 0:
-                sent = client_sock.send(msg)
-                msg = msg[sent:]
-
-        _send_all(data)
-
     def create_winners_message(self, winners: List[int] ) -> bytearray:
         """
         Creates a bytearray with the length of the winners. This bytearray is
@@ -249,7 +204,7 @@ class Server:
             client_message = None
             client_sock = client_sock[0]
             try:
-                client_data = self.safe_receive(client_sock)
+                client_data = safe_receive(client_sock)
                 client_message = ClientMessageDecoder.decode_client_message(client_data)
 
                 if not client_message.waiting_for_lottery:
@@ -258,7 +213,7 @@ class Server:
                         store_bets(bets)
 
                     logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
-                    self.safe_send(client_sock, self.create_bets_answer(len(bets)))
+                    safe_send(client_sock, self.create_bets_answer(len(bets)))
                     
                 else:
                     agency = client_message.client_agency
@@ -269,7 +224,7 @@ class Server:
                 logging.error(f"action: receive_message | result: fail | error: {e}")
             except ReadingMessageError as e:
                 logging.error(f'action: apuesta_recibida | result: fail | cantidad: 0')
-                self.safe_send(client_sock, self.create_bets_answer(INVALID_BETS_AMOUNT))
+                safe_send(client_sock, self.create_bets_answer(INVALID_BETS_AMOUNT))
 
             finally:
                 if client_message and not client_message.waiting_for_lottery:
