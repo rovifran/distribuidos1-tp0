@@ -56,7 +56,7 @@ func SafeReadBytes(buf io.Reader, responseBytes []byte, bytesToRead int) (int, e
 	return readBytes, nil
 }
 
-func SafeReadVariableBytes(buf io.Reader, responseBytes []byte) ([]byte, error) {
+func SafeReadVariableBytes(buf io.Reader) ([]byte, error) {
 	readBytes := 0
 	msgLenBytes := make([]byte, LEN_SERVER_MSG_SIZE)
 	n, err := SafeReadBytes(buf, msgLenBytes, LEN_SERVER_MSG_SIZE)

@@ -97,6 +97,8 @@ func (c *Client) sendBets(bets []*Bet) error {
 	return nil
 }
 
+// sendWaitingForLotteryMessage Sends a message to the server indicating
+// that the client is waiting for the lottery to start
 func (c *Client) sendWaitingForLotteryMessage() error {
 	encodedBytesLen := make([]byte, SIZE_UINT16)
 	binary.LittleEndian.PutUint16(encodedBytesLen, uint16(1))
@@ -112,6 +114,8 @@ func (c *Client) sendWaitingForLotteryMessage() error {
 	return nil
 }
 
+// obtainBetsFilePath Returns the path where the bets file is stored
+// based on the client ID (which is really the agency also)
 func (c *Client) obtainBetsFilePath() string {
 	return "/data/agency-" + c.config.ID + ".csv"
 }
@@ -133,7 +137,7 @@ func (c *Client) StartClientLoop() {
 mainCLientLoop:
 	for {
 		func() {
-			// Create the connection the server in every loop iteration. Send an
+			// Create the connection the server in every loop iteration.
 			if err := c.createClientSocket(); err != nil {
 				log.Errorf("action: create_socket | result: fail | client_id: %v | error: %v",
 					c.config.ID,
@@ -149,7 +153,7 @@ mainCLientLoop:
 		// close the socket in every case
 		defer c.conn.Close()
 
-		//Obtain the bet from the BetReader
+		// Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
 
 		if len(bets) != 0 {
@@ -166,9 +170,8 @@ mainCLientLoop:
 			log.Infof("action: apuesta_enviada | result: success | bets_sent: %d",
 				len(bets))
 
-			responseBytes := make([]byte, LEN_SERVER_MSG_SIZE)
-
-			res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), responseBytes)
+			// Read the answer from the server
+			res, err := SafeReadVariableBytes(bufio.NewReader(c.conn))
 
 			if res == nil {
 				log.Errorf("action: receive_message | result: server disconnected | client_id: %v",
@@ -185,6 +188,7 @@ mainCLientLoop:
 				return
 			}
 
+			// Process the server response and log the result
 			ServerResponse := ServerResponseFromBytes(res)
 
 			if ServerResponse.AmountOfBets > 0 {
@@ -198,7 +202,8 @@ mainCLientLoop:
 				)
 			}
 
-			// Wait a time between sending one message and the next one
+			// Wait a time between sending one message and the next one, and also
+			// handle SIGTERN Signaling
 			select {
 			case <-c.chnl:
 				log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
@@ -209,6 +214,7 @@ mainCLientLoop:
 			}
 		} else {
 			// Lottery time!
+			// Send the message to the server indicating that we are waiting for the lottery
 			if err := c.sendWaitingForLotteryMessage(); err != nil {
 				log.Errorf("action: send_waiting_for_lottery | result: fail | client_id: %v | error: %v",
 					c.config.ID,
@@ -221,9 +227,10 @@ mainCLientLoop:
 
 			lotteryChannel := make(chan []byte)
 
-			response := make([]byte, LEN_SERVER_MSG_SIZE)
+			// Fire the go routine that waits for the winners, this way we are able
+			// tu cut execution if we receive a SIGTERM
 			go func() {
-				res, err := SafeReadVariableBytes(bufio.NewReader(c.conn), response)
+				res, err := SafeReadVariableBytes(bufio.NewReader(c.conn))
 				if len(res) == 0 {
 					log.Infof("action: receive_message | result: server disconnected | client_id: %v",
 						c.config.ID,
@@ -243,6 +250,7 @@ mainCLientLoop:
 			}()
 
 			var serverResponse *ServerResponse
+			// Keep blocked until a message is received or a SIGTERM is received
 			select {
 			case <-c.chnl:
 				log.Infof("action: SIGTERM received | result: finishing early | client_id: %v", c.config.ID)
@@ -256,7 +264,7 @@ mainCLientLoop:
 			log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %d",
 				len(serverResponse.Winners))
 
-				break mainCLientLoop
+			break mainCLientLoop
 		}
 	}
 
