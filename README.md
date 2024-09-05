@@ -88,7 +88,7 @@ Para esclarecer la comunicacion entre el cliente y el servidor, el formato de lo
 ```
 Donde `mensaje` puede ser tanto las apuestas como el numero de agencias. El servidor hace lo siguiente:
 1. Lee la longitud del mensaje
-2. Lee los primeros 2 bytes del mensaje
+2. Lee el primer byte del mensaje
 3. Si la longitud del mensaje es 1, entonces se interpreta como el numero de agencia
 4. Si la longitud del mensaje es mayor a 1, entonces se interpreta como una apuesta
   
