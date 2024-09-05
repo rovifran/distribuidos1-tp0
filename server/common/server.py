@@ -141,26 +141,25 @@ class Server:
         sigterm_binder = SigTermSignalBinder()
         client_sock = None
 
-        with Manager():
-            while True:
-                try:
-                    client_sock = self.__accept_new_connection()
-                    self.worker_queue.put([client_sock])
-                    logging.info(f'action: client_connection | result: success')
+        while True:
+            try:
+                client_sock = self.__accept_new_connection()
+                self.worker_queue.put([client_sock])
+                logging.info(f'action: client_connection | result: success')
 
-                except common.sigterm_binding.SigTermError:
-                    logging.info(f'action: SIGTERM received | result: finishing early')
-                    break # It's not needed here because the signal triggers the sigterm_received flag, but it is more explicit this way.
-                except socket.timeout:
-                    # This case is assumed to be the lottery time
-                    self._start_lottery()
-                    break
-                except Exception as e:
-                    logging.error(f'action: finishing | result: fail | message: unknown error: {e.with_traceback()}')
-                    break
-            
-            # In multiprocessing each process should close its own client socket before finishing
-            self.finish_gracefully()
+            except common.sigterm_binding.SigTermError:
+                logging.info(f'action: SIGTERM received | result: finishing early')
+                break # It's not needed here because the signal triggers the sigterm_received flag, but it is more explicit this way.
+            except socket.timeout:
+                # This case is assumed to be the lottery time
+                self._start_lottery()
+                break
+            except Exception as e:
+                logging.error(f'action: finishing | result: fail | message: unknown error: {e.with_traceback()}')
+                break
+        
+        # In multiprocessing each process should close its own client socket before finishing
+        self.finish_gracefully()
 
     def safe_receive(self, client_sock) -> Bet:
         """
