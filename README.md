@@ -125,11 +125,10 @@ Luego de que los clientes hayan mandado todas sus apuestas, el servidor tiene qu
 # Ejercicio 8
 Para esta ultima parte del Trabajo, se pedia hacer que el servidor pueda procesar las consultas de los clientes en paralelo. Esto involucra la introduccion de mecanismos de comunicacion entre los procesos que lanza el servidor, asi como llevar un control de estos procesos y esperar a su eventual finalizacion.  
   
-## ThreadPool
-Implementé una `ThreadPool` utilizando la libreria `multiprocessing` de Python, con ayuda de las estructuras `Process` y `Queue`. La idea es que el servidor cree `N` procesos, siendo N la cantidad maxima de agencias que se pueden conectar al servidor (esto es para optimizar recursos, se pueden tener menos clientes pero la cantidad de procesos va a ser la misma y algunos estaran en espera). Esta threadpool la tiene el servidor, asi como cada handle de cada proceso. Al finalizar el servidor, se espera a que todos los procesos terminen.
+## Modificacion al servidor y Workers
+El servidor ahora funciona como un hilo que recibe conexiones y las delega a otros hilos para que hagan el procesamiento correspondiente. Utilizando la libreria `multiprocessing` de Python, con ayuda de las estructuras `Process` y `Queue` se logro este comportamiento. La idea es que el servidor cree `N` procesos, siendo N la cantidad maxima de agencias que se pueden conectar al servidor (esto es para optimizar recursos, se pueden tener menos clientes pero la cantidad de procesos va a ser la misma y algunos estaran en espera). El servidor se guarda cada handle de cada proceso. Al finalizar el servidor, se espera a que todos los procesos terminen.
 
-## Servidor central y Workers
-Con la implementacion de la thread pool se introdujo la idea de un servidor central y workers. El servidor central es el encargado de aceptar las conexiones de los clientes, y una vez aceptada, le pasa el socket a un worker para que haga el correspondiente procesamiento de los mensajes del cliente. Los workers ejecutan tareas en base a lo que le llegue del servidor central
+Los workers son los encargados de hacer el correspondiente procesamiento de los mensajes del cliente. 
 
 ### Comunicacion entre servidor central y workers
 La comunicacion entre el servidor central y los workers se hace mediante colas (`Queue` de multiprocessing). El servidor central tiene un extremo de la cola, mientras que todos los workers tienen el otro extremo de la cola, y todos ellos pueden leer de ella. Se asemeja a un modelo de multiples consumidores y un solo productor. El servidor puede mandar 3 tipos de mensajes a los workers:
