@@ -14,6 +14,7 @@ BET_LEN_SIZE = 1
 MSG_LEN_SIZE = 2
 FIRST_FIELD_SIZE = 2
 MAX_AGENCIES = 5
+INVALID_BETS_AMOUNT = -1
 
 
 class ReadingMessageError(Exception):
@@ -79,14 +80,11 @@ class Server:
     to the file, so all bets are considered for the lottery
     """
     def _start_lottery(self):
-        # self.end_threadpool_workers()
-
         logging.info(f'action: lottery_time | result: bets_received')
         self.central_lottery_agency.determine_winners()
         
         logging.info(f'action: lottery_time | result: winners_determined')
         winners = self.central_lottery_agency.get_winners()
-        logging.info(f"winners: {winners}")
         self.announce_winners_to_agencies(winners)
 
     """
@@ -101,6 +99,11 @@ class Server:
         self._server_socket.close()
         self.end_threadpool_workers()
 
+    """
+    Starts thread pool workers to handle client connections. A max of MAX_AGENCIES
+    workers are started, and they are saved in an array to later wait for their 
+    execution to finish
+    """
     def _init_thread_pool(self):
         self.workers = []
         for i in range(MAX_AGENCIES):
@@ -108,12 +111,19 @@ class Server:
             self.workers.append(p)
             p.start()
 
+    """
+    Waits until all workers in the workers array finish their execution
+    """
     def _join_workers(self):
         for p in self.workers:
             p.join()
 
         self.workers = []
 
+    """
+    Sends the signal to finish the workers execution by sending a None.
+    This is interpreted as a signal to finish the process.
+    """
     def end_threadpool_workers(self):
         for _ in range(len(self.workers)):
             self.worker_queue.put(None)
@@ -131,13 +141,10 @@ class Server:
         sigterm_binder = SigTermSignalBinder()
         client_sock = None
 
-        with Manager() as manager:
-            # self.agency_socket_queue = manager.Queue(MAX_AGENCIES)
-            # lock = manager.Lock()
+        with Manager():
             while True:
                 try:
                     client_sock = self.__accept_new_connection()
-                    # self.pool.apply(self.__handle_client_connection, args=(client_sock, queue,))
                     self.worker_queue.put([client_sock])
                     logging.info(f'action: client_connection | result: success')
 
@@ -222,7 +229,7 @@ class Server:
         msg = int(FIRST_FIELD_SIZE).to_bytes(2, 'little') + int(quantity).to_bytes(2, 'little')
         return msg
 
-    def __handle_client_connection(self, lock):#, process_set, process_set_lock):
+    def __handle_client_connection(self, lock):
         """
         Read message from a specific client socket and closes the socket
 
@@ -257,13 +264,13 @@ class Server:
                 else:
                     agency = client_message.client_agency
                     self.agency_socket_queue.put((agency, client_sock))
-                    logging.info(f'action: agencia_esperando_sorteo | result: success | agencia: ${agency}')
+                    logging.info(f'action: agencia_esperando_sorteo | result: success | agencia: {agency}')
 
             except OSError as e:
                 logging.error(f"action: receive_message | result: fail | error: {e}")
             except ReadingMessageError as e:
                 logging.error(f'action: apuesta_recibida | result: fail | cantidad: 0')
-                self.safe_send(client_sock, self.create_bets_answer(-1))
+                self.safe_send(client_sock, self.create_bets_answer(INVALID_BETS_AMOUNT))
 
             finally:
                 if client_message and not client_message.waiting_for_lottery:
