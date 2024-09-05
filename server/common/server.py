@@ -1,7 +1,7 @@
 import socket
 import logging
 from common.utils import Bet, store_bets
-from common.graceful_finisher import SigTermSignalBinder, SigTermError
+from common.sigterm_binding import SigTermSignalBinder, SigTermError
 from common.utils import Bet, store_bets
 MSG_LEN_SIZE = 2
 
@@ -99,7 +99,7 @@ class Server:
         try:
             bet = self.safe_receive(client_sock)
             addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {bet}')
+            logging.info(f'action: receive_message | result: success | ip: {addr[0]}')
             store_bets([bet])
             logging.info(f'action: store_bets | result: success | amount of bets: 1')
             self.safe_send(client_sock)
