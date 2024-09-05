@@ -75,6 +75,20 @@ def has_won(bet: Bet) -> bool:
     return bet.number == LOTTERY_WINNER_NUMBER
 
 """
+Receives a queue with the bets to store and reads the bets from it.
+It will keep reading from the queue until None is received, then it
+will stop.
+"""
+def store_bets_for_lottery(bet_writing_queue):
+    while True:
+        print("Waiting for bets...")
+        bets = bet_writing_queue.get()
+        print("Received bets.")
+        if bets is None:
+            break
+        store_bets(bets)        
+
+"""
 Persist the information of each bet in the STORAGE_FILEPATH file.
 Not thread-safe/process-safe.
 """

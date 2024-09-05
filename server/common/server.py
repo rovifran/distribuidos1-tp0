@@ -1,14 +1,20 @@
 import socket
 import logging
-from typing import Dict, List
+from typing import Dict, List, Tuple
+import common
 from common.sigterm_binding import SigTermSignalBinder, SigTermError
-from common.utils import Bet
+import common.sigterm_binding
+from common.utils import Bet, store_bets, store_bets_for_lottery
 from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
+from multiprocessing import Manager, Process, Pool, Lock, Queue
+from time import sleep
 
 BET_LEN_SIZE = 1
 MSG_LEN_SIZE = 2
 FIRST_FIELD_SIZE = 2
+MAX_AGENCIES = 5
+
 
 class ReadingMessageError(Exception):
     pass
@@ -26,25 +32,96 @@ class Server:
         self._server_socket.settimeout(10)
         self._server_socket.listen(listen_backlog)
         self.central_lottery_agency = CentralLotteryAgency()
+        self.bet_writing_queue = Queue(1)
+        self.agency_socket_queue = Queue(MAX_AGENCIES)
+        self.worker_queue = Queue(MAX_AGENCIES)
+        self.lock = Lock()
 
+    """
+    Removes the agency socket from the dictionary of agency sockets and
+    returns it.
+    """
+    def delete_agency_socket(self, agency_id):
+        self._agency_sockets.pop(agency_id)
+
+    """
+    Receives the agency id and the agency socket and stores it in the
+    dictionary of agency sockets, with the key being the agency_id and
+    the vaklue being the agency_socket.
+    """
     def store_agency_socket(self, agency_id, agency_socket):
         self._agency_sockets[agency_id] = agency_socket
 
+    """
+    Fires a process in the process pool that sends the winners to the
+    agency. The process receives the winners list, the agency socket and
+    the agency id as arguments, and closes the corresponding socket.
+    """
+    def _announce_winners_to_agency(self, agency_socket, agency_id, winners: List[int]):
+        self.safe_send(agency_socket, self.create_winners_message(winners))
+        logging.info(f'action: winners_announced | result: success | agency: {agency_id} | winners: {len(winners)}')
+        agency_socket.close()
+
+    """
+    Iterates through the clients that are waiting for the lottery and
+    sends them the winners of the lottery. The winners are passed by parameter.
+    """
     def announce_winners_to_agencies(self, winners: Dict[int, List[int]]):
+        logging.info(self.agency_socket_queue.empty())
+        while not self.agency_socket_queue.empty():
+            res = self.agency_socket_queue.get()
+            agency_id, agency_socket = res
+
+            self.worker_queue.put((agency_socket, agency_id, winners.get(agency_id, [])))
+    """
+    Starts the lottery and announces the winners to the agencies. The
+    function blocks until the writing process finishes writing the bets
+    to the file, so all bets are considered for the lottery
+    """
+    def _start_lottery(self):
+        # self.end_threadpool_workers()
+
+        logging.info(f'action: lottery_time | result: bets_received')
+        self.central_lottery_agency.determine_winners()
+        
+        logging.info(f'action: lottery_time | result: winners_determined')
         winners = self.central_lottery_agency.get_winners()
-        for agency_id, agency_socket in self._agency_sockets.items():
-            winners_dnis = winners.get(agency_id, [])
-            self.safe_send(agency_socket, self.create_winners_message(winners_dnis))
-            logging.info(f'action: winners_announced | result: success | agency: {agency_id} | winners: {len(winners_dnis)}')
-            agency_socket.close()
+        logging.info(f"winners: {winners}")
+        self.announce_winners_to_agencies(winners)
 
-    def finish_gracefully(self, client_sock):
+    """
+    Waits for all processes to finish and closes eventual open sockets
+    """
+    def finish_gracefully(self):
         self._server_socket.close()
-        for agency_socket in self._agency_sockets.values():
-            agency_socket.close()
-        if client_sock:
-            client_sock.close()
+        self.end_threadpool_workers()
 
+        # Pool is closed, so the sockets that were waiting for the lottery
+        # and somehow didn't receive the winners will be closed here
+        # This can happen when SIGTERM is raised when the server is waiting
+        # for the lottery to start. Also the lock isn't needed anymore
+        # because the pool has already been joined
+        # for agency_socket in self._agency_sockets.values():
+        #     agency_socket.close()
+
+    def _init_thread_pool(self):
+        self.workers = []
+        for i in range(MAX_AGENCIES):
+            p = Process(target=self.__handle_client_connection, args=(self.lock,))
+            self.workers.append(p)
+            p.start()
+
+    def _join_workers(self):
+        for p in self.workers:
+            p.join()
+
+        self.workers = []
+
+    def end_threadpool_workers(self):
+        for _ in range(len(self.workers)):
+            self.worker_queue.put(None)
+        
+        self._join_workers()
     def run(self):
         """
         Dummy Server loop
@@ -53,31 +130,33 @@ class Server:
         communication with a client. After client with communucation
         finishes, servers starts to accept new connections again
         """
-
+        self._init_thread_pool()
         sigterm_binder = SigTermSignalBinder()
         client_sock = None
 
-        while not sigterm_binder.sigterm_received:
-            try:
-                client_sock = self.__accept_new_connection()
-                self.__handle_client_connection(client_sock)
-            except SigTermError:
-                logging.info(f'action: SIGTERM received | result: finishing early')
-                break # It's not needed here because the signal triggers the sigterm_received flag, but it is more explicit this way.
-            except socket.timeout:
-                # This case is assumed to be the lottery time
-                self.central_lottery_agency.determine_winners()
-                logging.info(f'action: lottery_time | result: winners_determined')
-                winners = self.central_lottery_agency.get_winners()
-                self.announce_winners_to_agencies(winners)
-                break
-                
-            finally:
-                if client_sock and client_sock not in self._agency_sockets.values():
-                    client_sock.close()
-                    client_sock = None
-                
-        self.finish_gracefully(client_sock)
+        with Manager() as manager:
+            # self.agency_socket_queue = manager.Queue(MAX_AGENCIES)
+            # lock = manager.Lock()
+            while True:
+                try:
+                    client_sock = self.__accept_new_connection()
+                    # self.pool.apply(self.__handle_client_connection, args=(client_sock, queue,))
+                    self.worker_queue.put([client_sock])
+                    logging.info(f'action: client_connection | result: success')
+
+                except common.sigterm_binding.SigTermError:
+                    logging.info(f'action: SIGTERM received | result: finishing early')
+                    break # It's not needed here because the signal triggers the sigterm_received flag, but it is more explicit this way.
+                except socket.timeout:
+                    # This case is assumed to be the lottery time
+                    self._start_lottery()
+                    break
+                except Exception as e:
+                    logging.error(f'action: finishing | result: fail | message: unknown error: {e.with_traceback()}')
+                    break
+            
+            # In multiprocessing each process should close its own client socket before finishing
+            self.finish_gracefully()
 
     def safe_receive(self, client_sock) -> Bet:
         """
@@ -146,40 +225,52 @@ class Server:
         msg = int(FIRST_FIELD_SIZE).to_bytes(2, 'little') + int(quantity).to_bytes(2, 'little')
         return msg
 
-    def __handle_client_connection(self, client_sock):
+    def __handle_client_connection(self, lock):#, process_set, process_set_lock):
         """
         Read message from a specific client socket and closes the socket
 
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-        client_message = None
-        try:
-            client_data = self.safe_receive(client_sock)
-            client_message = ClientMessageDecoder.decode_client_message(client_data)
+        while True:
+            client_sock = self.worker_queue.get()
+            if client_sock is None:
+                logging.info(f'action: client_connection | result: finishing')
+                return # This is the signal to finish the process
+            
+            elif len(client_sock) > 1:
+                client_sock, agency,  winners = client_sock
+                self._announce_winners_to_agency(client_sock, agency, winners)
+                continue
 
-            if not client_message.waiting_for_lottery:
-                bets = client_message.bets
-                self.central_lottery_agency.add_bets(bets)
-                logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
-                self.safe_send(client_sock, self.create_bets_answer(len(bets)))
-                return
-                
-            else:
-                agency = client_message.client_agency
-                self.store_agency_socket(agency, client_sock)
-                logging.info(f'action: agencia_esperando_sorteo | result: success | agencia: ${agency}')
-                return
+            client_message = None
+            client_sock = client_sock[0]
+            try:
+                client_data = self.safe_receive(client_sock)
+                client_message = ClientMessageDecoder.decode_client_message(client_data)
 
-        except OSError as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
-        except ReadingMessageError as e:
-            logging.error(f'action: apuesta_recibida | result: fail | cantidad: 0')
-            self.safe_send(client_sock, self.create_bets_answer(-1))
+                if not client_message.waiting_for_lottery:
+                    bets = client_message.bets                
+                    with lock:
+                        store_bets(bets)
 
-        finally:
-            if client_message and not client_message.waiting_for_lottery:
-                client_sock.close()
+                    logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
+                    self.safe_send(client_sock, self.create_bets_answer(len(bets)))
+                    
+                else:
+                    agency = client_message.client_agency
+                    self.agency_socket_queue.put((agency, client_sock))
+                    logging.info(f'action: agencia_esperando_sorteo | result: success | agencia: ${agency}')
+
+            except OSError as e:
+                logging.error(f"action: receive_message | result: fail | error: {e}")
+            except ReadingMessageError as e:
+                logging.error(f'action: apuesta_recibida | result: fail | cantidad: 0')
+                self.safe_send(client_sock, self.create_bets_answer(-1))
+
+            finally:
+                if client_message and not client_message.waiting_for_lottery:
+                    client_sock.close()
 
     def __accept_new_connection(self):
         """
