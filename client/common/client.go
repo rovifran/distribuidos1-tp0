@@ -98,7 +98,9 @@ func (c *Client) StartClientLoop() {
 clientLoop:
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
+		if err := c.createClientSocket(); err != nil {
+			return
+		}
 
 		//Obtain the bet from the BetReader
 		bets := c.betReader.ReadBets()
