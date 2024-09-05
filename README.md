@@ -75,3 +75,29 @@ La estructura de los mensajes que manda el cliente es la siguiente:
 Mantuve la serializacion de la apuesta igual, lo unico que se modifico fue que el campo inicial ahora es la cantidad total de bytes a leer, y luego se sigue con la serializacion de las apuestas.  
   
 Por el lado del servidor, tambien se hizo la modificacion correspondiente para que pueda leer la cantidad de bytes de apuestas totales, y luego leer las apuestas correspondientes. Luego se sigue con la serializacion de todas las apuestas (aca se asume que no hay errores gracias a la tolerancia a fallas implementada en el protocolo de comunicacion y tambien al mecanismo de integridad de los datos que ofrece TCP), su almacenamiento en el archivo de apuestas, y la respuesta al cliente con la cantidad de apuestas recibidas. Esta parte del protocolo fue la que sufrio cambios con respecto a la implementacion anterior: ahora se manda la cantidad de apuestas procesadas o un -1 indicando que hubo un error.  
+
+# Ejercicio 7
+En este ejercicio, ya el servidor tenia que ser el encargado de realizar el sorteo una vez todos los clientes hayan terminado de mandar sus apuestas. Para esto se tuvo que implementar un mecanismo de sincronizacion entre los clientes y el servidor.  
+
+## Modificacion del protocolo
+Antes de esto, la principal dificultad fue cambiar una vez mas el protocolo para que el cliente pueda entender respuestas del servidor de logitud variable (antes solo se mandaba un entero para indicar la cantidad de apuestas leidas), para saber los ganadores del sorteo. Tambien el servidor sufrio cambios en la forma de interpretar los mensajes de los clientes (antes solo se mandaban apuestas, ahora se mandan apuestas y tambien mensajes de espera a apuesta). Ahora al cliente se le agrego un mensaje adicional, en el cual envia solamente el numero de su agencia.  
+  
+Para esclarecer la comunicacion entre el cliente y el servidor, el formato de los mensajes del cliente es el siguiente:
+```
+<longitud de mensaje><mensaje>
+```
+Donde `mensaje` puede ser tanto las apuestas como el numero de agencias. El servidor hace lo siguiente:
+1. Lee la longitud del mensaje
+2. Lee los primeros 2 bytes del mensaje
+3. Si la longitud del mensaje es 1, entonces se interpreta como el numero de agencia
+4. Si la longitud del mensaje es mayor a 1, entonces se interpreta como una apuesta
+  
+Esto se hace asumiendo que el cliente no puede mandar un mensaje con 0 apuestas.  
+## Sincronizacion
+Luego de que los clientes hayan mandado todas sus apuestas, el servidor tiene que realizar el sorteo. El servidor tiene que esperar a que todos los clientes terminen antes de hacer el sorteo. Lo implementado fue lo siguiente:
+* Un cliente cuando termina manda el mensaje con su numero de agencia (se asume que hay como maximo 5 clientes, cada uno perteneciente a una agencia distinta)
+* El servidor toma nota del cliente que esta esperando y se guarda su numero de aguencia con el socket en un diccionario interno, y **no** cierra el socket
+* El servidor puede seguir recibiendo mensajes de otros clientes ya sea para solicitar resultados del sorteo o mandar apuestas. Mientras tanto los clientes que estan esperando el sorteo se quedan bloqueados en espera a una respuesta
+* Luego de 30 segundos de inactividad, el servidor interpreta como que todos los clients terminaron de mandar sus apuestas y procede a hacer el sorteo
+* Una vez obtenidos los resultados, el servidor manda los resultados a todos los clientes que estaban esperando, y luego cierra los sockets de estos clientes
+  

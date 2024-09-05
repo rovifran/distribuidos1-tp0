@@ -1,7 +1,7 @@
 import socket
 import logging
 from typing import Dict, List
-from common.graceful_finisher import SigTermSignalBinder, SigTermError
+from common.sigterm_binding import SigTermSignalBinder, SigTermError
 from common.utils import Bet
 from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
