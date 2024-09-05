@@ -59,7 +59,9 @@ func (c *Client) StartClientLoop() {
 clientLoop:
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
+		if err := c.createClientSocket(); err != nil {
+			break clientLoop
+		}
 
 		// TODO: Modify the send to avoid short-write
 		fmt.Fprintf(
