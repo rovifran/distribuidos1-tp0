@@ -1,6 +1,6 @@
 import socket
 import logging
-from common.graceful_finisher import SigTermSignalBinder, SigTermError
+from common.sigterm_binding import SigTermSignalBinder, SigTermError
 
 
 class Server:
