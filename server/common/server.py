@@ -10,6 +10,7 @@ from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
 from multiprocessing import Process, Lock, Queue
 from time import sleep
+from common.server_protocol import create_winners_message, create_bets_answer
 
 BET_LEN_SIZE = 1
 MSG_LEN_SIZE = 2
@@ -60,7 +61,7 @@ class Server:
     the agency id as arguments, and closes the corresponding socket.
     """
     def _announce_winners_to_agency(self, agency_socket, agency_id, winners: List[int]):
-        safe_send(agency_socket, self.create_winners_message(winners))
+        safe_send(agency_socket, create_winners_message(winners))
         logging.info(f'action: winners_announced | result: success | agency: {agency_id} | winners: {len(winners)}')
         agency_socket.close()
 
@@ -162,27 +163,6 @@ class Server:
         # In multiprocessing each process should close its own client socket before finishing
         self.finish_gracefully()
 
-    def create_winners_message(self, winners: List[int] ) -> bytearray:
-        """
-        Creates a bytearray with the length of the winners. This bytearray is
-        sent to the agency to acknowledge the winners of the lottery.
-        """
-        winners_bytes = b''
-        for winner in winners:
-            winners_bytes += int(winner).to_bytes(4, 'little')
-        
-        winners_bytes = int(len(winners)).to_bytes(2, 'little') + winners_bytes
-        
-        return int(len(winners_bytes)).to_bytes(2, 'little') + winners_bytes
-
-    def create_bets_answer(self, quantity: int) -> bytearray:
-        """
-        Creates a bytearray with the length of the bets. This bytearray is
-        sent to the client to acknowledge the bets received.
-        """
-        msg = int(FIRST_FIELD_SIZE).to_bytes(2, 'little') + int(quantity).to_bytes(2, 'little')
-        return msg
-
     def __handle_client_connection(self, lock):
         """
         Read message from a specific client socket and closes the socket
@@ -213,7 +193,7 @@ class Server:
                         store_bets(bets)
 
                     logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
-                    safe_send(client_sock, self.create_bets_answer(len(bets)))
+                    safe_send(client_sock, create_bets_answer(len(bets)))
                     
                 else:
                     agency = client_message.client_agency
@@ -224,7 +204,7 @@ class Server:
                 logging.error(f"action: receive_message | result: fail | error: {e}")
             except ReadingMessageError as e:
                 logging.error(f'action: apuesta_recibida | result: fail | cantidad: 0')
-                safe_send(client_sock, self.create_bets_answer(INVALID_BETS_AMOUNT))
+                safe_send(client_sock, create_bets_answer(INVALID_BETS_AMOUNT))
 
             finally:
                 if client_message and not client_message.waiting_for_lottery:
