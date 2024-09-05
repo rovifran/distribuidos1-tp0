@@ -51,7 +51,7 @@ def parseClientAmountInput(amount: str) -> int:
     If the amount of clients is not a number or is less than 1, raises a ValueError.
     """
 
-    if not amount.isnumeric() or int(amount) < 1:
+    if not amount.isnumeric() or int(amount) < 0:
         raise ValueError("Amount entered not a number or invalid amount, program closing.")
     return int(amount)
 
