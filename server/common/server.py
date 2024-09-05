@@ -1,15 +1,14 @@
 import socket
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import common
-from common.sigterm_binding import SigTermSignalBinder, SigTermError
+from common.sigterm_binding import SigTermSignalBinder
 import common.sigterm_binding
 from common.safe_communication import safe_receive, safe_send
-from common.utils import Bet, store_bets, store_bets_for_lottery
+from common.utils import store_bets
 from common.central_lottery_agency import CentralLotteryAgency
 from common.client_message import ClientMessageDecoder
 from multiprocessing import Process, Lock, Queue
-from time import sleep
 from common.server_protocol import create_winners_message, create_bets_answer
 
 BET_LEN_SIZE = 1
@@ -17,7 +16,6 @@ MSG_LEN_SIZE = 2
 FIRST_FIELD_SIZE = 2
 MAX_AGENCIES = 5
 INVALID_BETS_AMOUNT = -1
-
 
 class ReadingMessageError(Exception):
     pass
@@ -39,21 +37,6 @@ class Server:
         self.agency_socket_queue = Queue(MAX_AGENCIES)
         self.worker_queue = Queue(MAX_AGENCIES)
         self.lock = Lock()
-
-    """
-    Removes the agency socket from the dictionary of agency sockets and
-    returns it.
-    """
-    def delete_agency_socket(self, agency_id):
-        self._agency_sockets.pop(agency_id)
-
-    """
-    Receives the agency id and the agency socket and stores it in the
-    dictionary of agency sockets, with the key being the agency_id and
-    the vaklue being the agency_socket.
-    """
-    def store_agency_socket(self, agency_id, agency_socket):
-        self._agency_sockets[agency_id] = agency_socket
 
     """
     Fires a process in the process pool that sends the winners to the
