@@ -101,3 +101,30 @@ Luego de que los clientes hayan mandado todas sus apuestas, el servidor tiene qu
 * Luego de 30 segundos de inactividad, el servidor interpreta como que todos los clients terminaron de mandar sus apuestas y procede a hacer el sorteo
 * Una vez obtenidos los resultados, el servidor manda los resultados a todos los clientes que estaban esperando, y luego cierra los sockets de estos clientes
   
+# Ejercicio 8
+Para esta ultima parte del Trabajo, se pedia hacer que el servidor pueda procesar las consultas de los clientes en paralelo. Esto involucra la introduccion de mecanismos de comunicacion entre los procesos que lanza el servidor, asi como llevar un control de estos procesos y esperar a su eventual finalizacion.  
+  
+## ThreadPool
+Implementé una `ThreadPool` utilizando la libreria `multiprocessing` de Python, con ayuda de las estructuras `Process` y `Queue`. La idea es que el servidor cree `N` procesos, siendo N la cantidad maxima de agencias que se pueden conectar al servidor (esto es para optimizar recursos, se pueden tener menos clientes pero la cantidad de procesos va a ser la misma y algunos estaran en espera). Esta threadpool la tiene el servidor, asi como cada handle de cada proceso. Al finalizar el servidor, se espera a que todos los procesos terminen.
+
+## Servidor central y Workers
+Con la implementacion de la thread pool se introdujo la idea de un servidor central y workers. El servidor central es el encargado de aceptar las conexiones de los clientes, y una vez aceptada, le pasa el socket a un worker para que haga el correspondiente procesamiento de los mensajes del cliente. Los workers ejecutan tareas en base a lo que le llegue del servidor central
+
+### Comunicacion entre servidor central y workers
+La comunicacion entre el servidor central y los workers se hace mediante colas (`Queue` de multiprocessing). El servidor central tiene un extremo de la cola, mientras que todos los workers tienen el otro extremo de la cola, y todos ellos pueden leer de ella. Se asemeja a un modelo de multiples consumidores y un solo productor. El servidor puede mandar 3 tipos de mensajes a los workers:
+* **Mensaje Nulo**: Se manda cuando el servidor central quiere que el worker termine su ejecucion
+* **Socket**: El servidor le manda el socket recientemente aceptado del cliente, para que el worker haga el correspondiente procesamiento de estos mensajes (que pueden ser tanto para mandar apuestas como para esperar el sorteo).
+* **Resultado**: El servidor le manda el resultado del sorteo al worker en un formato de tripla `(socket, agencia, ganadores)`, para que el worker se lo mande al cliente correspondiente.  
+  
+El servidor cumple con la misma logica anterior para los sorteos, esperando 15 segundos a que no haya ningun mensaje nuevo para realizar el sorteo.
+
+### Esritura de apuestas y espera del sorteo
+La escritura de las apuestas ya no esta a cargo de la agencia central de loteria, como estaba hecha en el anterior punto, sino que se tiene un `lock` en el archivo de apuestas para que cada worker escriba la apuesta que le llega del cliente. La espera del sorteo se hace de la misma forma que en el punto anterior, con la diferencia de que ahora se guarda el socket del cliente y la agencia en otra `Queue` con capacidad maxima de la cantidad de apuestas.  
+Esto hace que el servidor, cuando le tenga que mandar los ganadores a las agencias, pueda ir sacando los sockets de la cola y mandarles los resultados correspondientes a traves de los workers.
+
+## Detalles de implementacion
+Los workers solo debe terminar su ejecucion luego de recibido el mensaje nulo del servidor central. De hacerlo antes, los sockets asociados a los clientes se terminan cerrando, imposibilitando la comunicacion de los ganadores (fuente: https://github.com/pytorch/pytorch/issues/7181#issuecomment-386378100).  
+El graceful finish toma en cuenta tanto a los workers como al servidor central.  
+Se asume que se tiene como maximo N agencias conectadas al servidor, con N = 5.  
+El archivo `bets.csv` del servidor se vuelve a crear cada vez que este inicia, para que no haya problemas de integridad de los datos.  
+Se asume que cada persona puede jugar una sola vez un mismo numero.  

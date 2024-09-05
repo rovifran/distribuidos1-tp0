@@ -90,19 +90,16 @@ class Server:
         self.announce_winners_to_agencies(winners)
 
     """
-    Waits for all processes to finish and closes eventual open sockets
+    Closes the listener socket and ends the workers cycle, and closes the 
+    client sockets that are waiting for the lottery if there was a graceful
+    finish before the lottery.
     """
     def finish_gracefully(self):
+        while not self.agency_socket_queue.empty():
+            _, agency_socket = self.agency_socket_queue.get()
+            agency_socket.close()
         self._server_socket.close()
         self.end_threadpool_workers()
-
-        # Pool is closed, so the sockets that were waiting for the lottery
-        # and somehow didn't receive the winners will be closed here
-        # This can happen when SIGTERM is raised when the server is waiting
-        # for the lottery to start. Also the lock isn't needed anymore
-        # because the pool has already been joined
-        # for agency_socket in self._agency_sockets.values():
-        #     agency_socket.close()
 
     def _init_thread_pool(self):
         self.workers = []
