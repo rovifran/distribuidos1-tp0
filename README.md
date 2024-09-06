@@ -45,7 +45,7 @@ La implementacion del graceful finish no varia mucho en el resto de los ejercici
 # Ejercicio 5
 En este ejercicio se requiere cambiar la funcionalidad del echo server que teniamos hasta ahora, para que funcionase como un servidor que recibe apuestas por parte de los clientes. Para esto habia que crear un protocolo de comunicacion entre el cliente y el servidor, en el cual se pueda pasar toda la informacion necesaria para realizar la apuesta.
 
-## Protocolo  
+## Encodeo de datos
 La conexion se sigue haciendo por TCP entre el cliente y el servidor.  
   
 La estructura que almacena la informacion del lado del cliente es la siguiente:
@@ -141,6 +141,22 @@ El servidor cumple con la misma logica anterior para los sorteos, esperando 15 s
 ### Esritura de apuestas y espera del sorteo
 La escritura de las apuestas ya no esta a cargo de la agencia central de loteria, como estaba hecha en el anterior punto, sino que se tiene un `lock` en el archivo de apuestas para que cada worker escriba la apuesta que le llega del cliente. La espera del sorteo se hace de la misma forma que en el punto anterior, con la diferencia de que ahora se guarda el socket del cliente y la agencia en otra `Queue` con capacidad maxima de la cantidad de apuestas.  
 Esto hace que el servidor, cuando le tenga que mandar los ganadores a las agencias, pueda ir sacando los sockets de la cola y mandarles los resultados correspondientes a traves de los workers.
+
+# Protocolo Cliente-Servidor
+El intercambio de mensajes entre el cliente y el servidor es el siguiente:
+1. Primero, el servidor queda escuchando conexiones entrantes
+2. El cliente, luego de establecida la conexion, puede mandar 2 tipos de mensajes:
+    * **Apuesta**: El cliente manda las apuestas en el formato explicado anteriormente
+    * **Espera a Sorteo**: El cliente le notifica al servidor que termino de mandar las apuestas y que esta esperando el sorteo.  
+      
+    Luego de mandar este mensaje el cliente se bloquea esperando un mensaje de respuesta del servidor.
+
+
+3. El servidor, luego de recibir el mensaje del cliente, se comporta de dos formas distintas:
+    * **Apuesta**: El servidor guarda la apuesta en el archivo de apuestas y le manda un mensaje de confirmacion al cliente con la cantidad de apuestas recibidas o si hubo un error en el proceso
+    * **Espera a Sorteo**: El servidor no le responde inmediatamente al cliente, sino que guarda el socket del cliente en una cola y espera a que todos los clientes terminen de mandar sus apuestas. Luego de 15 segundos de inactividad, el servidor procede a hacer el sorteo y manda los resultados a los clientes que estaban esperando.
+4. El socket entre el cliente y el servidor se cierra, y el cliente dependiendo de si tiene que mandar mas apuestas o si ya recibio los ganadores, se vuelve a conectar al servidor o termina su ejecucion.  
+5. El servidor va a escuchar por conexiones entrantes nuevamente excepto en los casos en donde se reciba la señal `SIGTERM`, o en donde se haya terminado el sorteo, liberando todos los recursos asociados.
 
 ## Detalles de implementacion
 Los workers solo debe terminar su ejecucion luego de recibido el mensaje nulo del servidor central. De hacerlo antes, los sockets asociados a los clientes se terminan cerrando, imposibilitando la comunicacion de los ganadores (fuente: https://github.com/pytorch/pytorch/issues/7181#issuecomment-386378100).  
